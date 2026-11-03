@@ -1,0 +1,134 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner() {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email == 'mynameismrsindia@gmail.com';
+    }
+
+    function isSeller() {
+      return signedIn()
+        && !isOwner()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid))
+          .data.role == 'seller';
+    }
+
+    function saleMatchesProductUpdate(productId) {
+      let saleId = request.resource.data.lastSaleId;
+      let salePath = /databases/$(database)/documents/sales/$(saleId);
+      return saleId is string
+        && !exists(salePath)
+        && existsAfter(salePath)
+        && getAfter(salePath).data.sellerId == request.auth.uid
+        && getAfter(salePath).data.productId == productId
+        && getAfter(salePath).data.requestId == saleId
+        && resource.data.active == true
+        && getAfter(salePath).data.quantity
+          == resource.data.quantity - request.resource.data.quantity;
+    }
+
+    match /users/{userId} {
+      allow get: if signedIn() && request.auth.uid == userId;
+      allow list: if isOwner();
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && request.auth.token.email_verified == true
+        && request.resource.data.id == userId
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.role == (isOwner() ? 'owner' : 'seller')
+        && request.resource.data.keys().hasOnly([
+          'id', 'email', 'name', 'role', 'storeName', 'contact', 'location',
+          'createdAt'
+        ]);
+      allow update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'storeName', 'contact', 'location', 'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    match /products/{productId} {
+      allow get, list: if isOwner()
+        || (isSeller() && resource.data.active == true);
+      allow create: if isOwner()
+        && request.resource.data.id == productId
+        && request.resource.data.name is string
+        && request.resource.data.quantity is int
+        && request.resource.data.quantity >= 0
+        && request.resource.data.active is bool
+        && request.resource.data.keys().hasOnly([
+          'id', 'name', 'quantity', 'active', 'createdAt'
+        ]);
+      allow update: if isOwner()
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'name', 'active', 'quantity', 'updatedAt'
+          ])
+          && (!request.resource.data.diff(resource.data)
+                .affectedKeys().hasAny(['quantity'])
+              || request.resource.data.quantity >= resource.data.quantity)
+        || isSeller()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'quantity', 'lastSaleId', 'updatedAt'
+          ])
+          && request.resource.data.quantity is int
+          && request.resource.data.quantity >= 0
+          && request.resource.data.quantity < resource.data.quantity
+          && saleMatchesProductUpdate(productId);
+      allow delete: if isOwner();
+    }
+
+    match /sales/{saleId} {
+      allow get, list: if isOwner()
+        || (isSeller() && resource.data.sellerId == request.auth.uid);
+      allow create: if isSeller()
+        && request.resource.data.requestId == saleId
+        && request.resource.data.sellerId == request.auth.uid
+        && request.resource.data.productId is string
+        && request.resource.data.quantity is int
+        && request.resource.data.quantity > 0
+        && request.resource.data.rate is int
+        && request.resource.data.rate >= 0
+        && request.resource.data.salesman is string
+        && request.resource.data.store is string
+        && request.resource.data.contact is string
+        && request.resource.data.location is string
+        && request.resource.data.productName is string
+        && request.resource.data.totalAmount
+          == request.resource.data.quantity * request.resource.data.rate
+        && request.resource.data.orderStatus == 'pending'
+        && request.resource.data.keys().hasOnly([
+          'requestId', 'sellerId', 'salesman', 'store', 'contact', 'location',
+          'productId', 'productName', 'quantity', 'rate', 'totalAmount',
+          'createdAt', 'orderStatus'
+        ])
+        && get(
+          /databases/$(database)/documents/products/$(request.resource.data.productId)
+        ).data.active == true
+        && getAfter(
+          /databases/$(database)/documents/products/$(request.resource.data.productId)
+        ).data.quantity
+          == get(
+            /databases/$(database)/documents/products/$(request.resource.data.productId)
+          ).data.quantity - request.resource.data.quantity
+        && getAfter(
+          /databases/$(database)/documents/products/$(request.resource.data.productId)
+        ).data.lastSaleId == saleId;
+      allow update: if isOwner()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'orderStatus', 'updatedAt'
+        ])
+        && request.resource.data.orderStatus in ['pending', 'approved'];
+      allow delete: if false;
+    }
+  }
+}

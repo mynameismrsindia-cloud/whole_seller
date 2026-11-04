@@ -12,20 +12,7 @@
           "package_name": "com.example.owner_desktop"
         }
       },
-      "oauth_client": [
-        {
-          "client_id": "601424796794-vt745m2osus4ukucq0uh5748ge5sjtsf.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.example.owner_desktop",
-            "certificate_hash": "e5c33b8a41808824a847fd2d51a13ddf7de60a30"
-          }
-        },
-        {
-          "client_id": "601424796794-daodr8ql3n0h9umajcur1j6djstbje10.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
+      "oauth_client": [],
       "api_key": [
         {
           "current_key": "AIzaSyDEktL1ZZeaU4-eQavkkpSorDEKBxZ9-tU"
@@ -33,12 +20,7 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "601424796794-daodr8ql3n0h9umajcur1j6djstbje10.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
+          "other_platform_oauth_client": []
         }
       }
     },
@@ -49,20 +31,7 @@
           "package_name": "com.example.seller_app"
         }
       },
-      "oauth_client": [
-        {
-          "client_id": "601424796794-l5kqj1u6l1no01jb6bfl3laebmg9rq2g.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.example.seller_app",
-            "certificate_hash": "e5c33b8a41808824a847fd2d51a13ddf7de60a30"
-          }
-        },
-        {
-          "client_id": "601424796794-daodr8ql3n0h9umajcur1j6djstbje10.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
+      "oauth_client": [],
       "api_key": [
         {
           "current_key": "AIzaSyDEktL1ZZeaU4-eQavkkpSorDEKBxZ9-tU"
@@ -70,12 +39,7 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "601424796794-daodr8ql3n0h9umajcur1j6djstbje10.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
+          "other_platform_oauth_client": []
         }
       }
     }

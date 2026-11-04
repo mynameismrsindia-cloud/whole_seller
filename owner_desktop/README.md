@@ -21,10 +21,13 @@ flutter build apk
 flutter test
 ```
 
-To create a Windows release from a non-Windows computer, push the project to
-GitHub, open **Actions → Build owner Windows app → Run workflow**, then
-download the `owner-desktop-windows-x64` artifact. Extract it on Windows and
-run `owner_desktop.exe`; keep the bundled DLL and `data` directory beside it.
+To create a Windows installer from a non-Windows computer, push the project to
+GitHub, open **Actions → Build owner Windows app → Run workflow**, then download
+the `owner-desktop-Setup` artifact. Run `owner-desktop-Setup.exe` on Windows.
+It installs the complete app bundle, creates Start Menu and Desktop shortcuts,
+and installs Microsoft's signed Visual C++ x64 Redistributable when the
+required version is missing. If the runtime requires a restart, Setup will
+prompt to restart Windows. The app can then be opened from either shortcut.
 
 Firebase app configuration is in `lib/firebase_options.dart` and
 `android/app/google-services.json`.

@@ -137,14 +137,21 @@ class _SalesListScreenState extends State<SalesListScreen> {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              Switch.adaptive(
-                                key: ValueKey('order-status-${sale.userId}'),
-                                value: sale.orderStatus == OrderStatus.approved,
-                                onChanged: (approved) => widget.onStatusChanged(
-                                  sale,
-                                  approved
-                                      ? OrderStatus.approved
-                                      : OrderStatus.pending,
+                              FilledButton(
+                                key: ValueKey(
+                                  'approve-order-${sale.id.isEmpty ? sale.userId : sale.id}',
+                                ),
+                                onPressed:
+                                    sale.orderStatus == OrderStatus.pending
+                                    ? () => widget.onStatusChanged(
+                                        sale,
+                                        OrderStatus.approved,
+                                      )
+                                    : null,
+                                child: Text(
+                                  sale.orderStatus == OrderStatus.pending
+                                      ? 'Approve'
+                                      : 'Approved',
                                 ),
                               ),
                             ],

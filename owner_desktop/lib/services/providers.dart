@@ -248,6 +248,10 @@ class FirebaseRepository {
   }
 
   Future<void> updateSaleStatus(Sale sale, OrderStatus status) async {
+    if (sale.orderStatus != OrderStatus.pending ||
+        status != OrderStatus.approved) {
+      throw StateError('An order can only be approved once.');
+    }
     await firestore.collection('sales').doc(sale.id).update({
       'orderStatus': status.name,
       'updatedAt': FieldValue.serverTimestamp(),

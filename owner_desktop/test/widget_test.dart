@@ -62,7 +62,9 @@ void main() {
     expect(find.text('Sugar'), findsNothing);
   });
 
-  testWidgets('owner profile shows support contact details', (tester) async {
+  testWidgets('owner profile does not show hardcoded support contact', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -77,9 +79,8 @@ void main() {
       ),
     );
 
-    expect(find.text('Any issue? Connect with Pratap Mity'), findsOneWidget);
-    expect(find.text('pratapmity@gmail.com'), findsOneWidget);
-    expect(find.byKey(const Key('owner-contact-us')), findsOneWidget);
+    expect(find.text('Any issue? Connect with Pratap Mity'), findsNothing);
+    expect(find.text('pratapmity@gmail.com'), findsNothing);
   });
 
   testWidgets('add product form scrolls on a short desktop window', (
@@ -122,14 +123,22 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Sales Entries'), findsWidgets);
     expect(find.text('Rahul'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Rahul')).dy,
+      lessThan(tester.getTopLeft(find.text('Amit')).dy),
+    );
     expect(find.text('Pending'), findsNWidgets(2));
-    final statusSwitch = find.byKey(const ValueKey('order-status-demo-rahul'));
-    await tester.ensureVisible(statusSwitch);
+    final approveButton = find.byKey(
+      const ValueKey('approve-order-demo-rahul'),
+    );
+    await tester.ensureVisible(approveButton);
     await tester.pumpAndSettle();
-    await tester.tap(statusSwitch);
+    await tester.tap(approveButton);
     await tester.pumpAndSettle();
-    expect(find.text('Approved'), findsOneWidget);
+    expect(find.text('Approved'), findsNWidgets(2));
     expect(find.text('Pending'), findsOneWidget);
+    expect(approveButton, findsOneWidget);
+    expect(tester.widget<FilledButton>(approveButton).onPressed, isNull);
     expect(tester.takeException(), isNull);
   });
 }

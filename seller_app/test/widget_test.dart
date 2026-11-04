@@ -38,7 +38,9 @@ void main() {
     expect(find.text('New Sales Entry'), findsOneWidget);
   });
 
-  testWidgets('profile shows support contact details', (tester) async {
+  testWidgets('profile does not show hardcoded support contact', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -53,9 +55,8 @@ void main() {
       ),
     );
 
-    expect(find.text('Any issue? Connect with Pratap Mity'), findsOneWidget);
-    expect(find.text('pratapmity@gmail.com'), findsOneWidget);
-    expect(find.byKey(const Key('seller-contact-us')), findsOneWidget);
+    expect(find.text('Any issue? Connect with Pratap Mity'), findsNothing);
+    expect(find.text('pratapmity@gmail.com'), findsNothing);
   });
 
   testWidgets('seller can submit a demo sale', (tester) async {

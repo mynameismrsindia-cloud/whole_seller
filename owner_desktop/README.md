@@ -21,5 +21,10 @@ flutter build apk
 flutter test
 ```
 
+To create a Windows release from a non-Windows computer, push the project to
+GitHub, open **Actions → Build owner Windows app → Run workflow**, then
+download the `owner-desktop-windows-x64` artifact. Extract it on Windows and
+run `owner_desktop.exe`; keep the bundled DLL and `data` directory beside it.
+
 Firebase app configuration is in `lib/firebase_options.dart` and
 `android/app/google-services.json`.

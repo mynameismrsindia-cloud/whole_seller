@@ -124,10 +124,11 @@ service cloud.firestore {
           /databases/$(database)/documents/products/$(request.resource.data.productId)
         ).data.lastSaleId == saleId;
       allow update: if isOwner()
+        && resource.data.orderStatus == 'pending'
+        && request.resource.data.orderStatus == 'approved'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'orderStatus', 'updatedAt'
-        ])
-        && request.resource.data.orderStatus in ['pending', 'approved'];
+        ]);
       allow delete: if false;
     }
   }

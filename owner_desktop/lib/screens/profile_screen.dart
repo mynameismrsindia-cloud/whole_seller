@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../services/providers.dart';
 import '../widgets/labeled_field.dart';
@@ -103,34 +101,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           )
                         : const Text('Save profile'),
                   ),
-                  const SizedBox(height: 18),
-                  Card(
-                    color: const Color(0xFFEAF4F2),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Any issue? Connect with Pratap Mity',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          const SelectableText('pratapmity@gmail.com'),
-                          const SizedBox(height: 12),
-                          OutlinedButton.icon(
-                            key: const Key('owner-contact-us'),
-                            onPressed: _contactSupport,
-                            icon: const Icon(Icons.email_outlined),
-                            label: const Text('Contact Us'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -178,29 +148,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     } finally {
       if (mounted) setState(() => saving = false);
-    }
-  }
-
-  Future<void> _contactSupport() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final emailUri = Uri(
-      scheme: 'mailto',
-      path: 'pratapmity@gmail.com',
-      queryParameters: {'subject': 'Wholesale Manager support'},
-    );
-    try {
-      final launched = await launchUrl(emailUri);
-      if (!launched && mounted) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Could not open an email app.')),
-        );
-      }
-    } on PlatformException {
-      if (mounted) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Could not open an email app.')),
-        );
-      }
     }
   }
 }

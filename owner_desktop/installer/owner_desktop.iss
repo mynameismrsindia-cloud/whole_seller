@@ -77,9 +77,7 @@ begin
       'but its required runtime was not detected. Close other installers and ' +
       'choose Retry, or cancel setup.'
   else
-    Result := Format(
-      'The Microsoft Visual C++ x64 Redistributable installation failed (code %d). ' +
-        'Close other installers and choose Retry, or cancel setup.',
-      [ResultCode]
-    );
+    Result := 'The Microsoft Visual C++ x64 Redistributable installation failed ' +
+      '(code ' + IntToStr(ResultCode) + '). Close other installers and choose ' +
+      'Retry, or cancel setup.';
 end;

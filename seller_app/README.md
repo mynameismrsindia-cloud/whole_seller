@@ -11,6 +11,9 @@ flutter build apk
 flutter test
 ```
 
+To build the Android APK from GitHub, open **Actions → Build seller Android
+app → Run workflow**, then download the `seller-app-android-apk` artifact.
+
 Sellers can view active products and submit sales. Firestore checks stock and
 records the sale atomically. Firebase app configuration is in
 `lib/firebase_options.dart` and `android/app/google-services.json`.

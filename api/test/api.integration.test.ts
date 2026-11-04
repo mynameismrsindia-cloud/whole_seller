@@ -77,6 +77,10 @@ const testSuite = test('API integration', { skip: !testUrl }, async (t) => {
   }
 
   await t.test('registration, login, role enforcement, and sale integrity', async () => {
+    const health = await request('/health');
+    assert.equal(health.status, 200);
+    assert.deepEqual(health.body, { status: 'ok' });
+
     const unique = randomUUID();
     sellerEmail = `seller-${unique}@example.test`;
     const registration = await request('/auth/register', {

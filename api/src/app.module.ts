@@ -4,6 +4,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthGuard, RolesGuard } from './auth';
 import { AuthController, AuthService } from './auth.controller';
 import { Database } from './database';
+import { HealthController, HealthService } from './health.controller';
 import { ProductsController, ProductsService } from './products.controller';
 import { SalesController, SalesService } from './sales.controller';
 
@@ -13,10 +14,11 @@ import { SalesController, SalesService } from './sales.controller';
       { ttl: 60_000, limit: 120 },
     ]),
   ],
-  controllers: [AuthController, ProductsController, SalesController],
+  controllers: [AuthController, HealthController, ProductsController, SalesController],
   providers: [
     Database,
     AuthService,
+    HealthService,
     ProductsService,
     SalesService,
     AuthGuard,

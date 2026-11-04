@@ -1,10 +1,8 @@
 import 'dart:async';
 
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'firebase_options.dart';
 import 'models/app_user.dart';
 import 'models/product.dart';
 import 'screens/login_screen.dart';
@@ -15,40 +13,7 @@ import 'services/providers.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-  } catch (error, stackTrace) {
-    FlutterError.reportError(
-      FlutterErrorDetails(exception: error, stack: stackTrace),
-    );
-    runApp(_FirebaseSetupErrorApp(error: error));
-    return;
-  }
   runApp(const ProviderScope(child: SellerApp()));
-}
-
-class _FirebaseSetupErrorApp extends StatelessWidget {
-  const _FirebaseSetupErrorApp({required this.error});
-
-  final Object error;
-
-  @override
-  Widget build(BuildContext context) => MaterialApp(
-    home: Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: SelectableText(
-            'Firebase setup failed. Configure this app with FlutterFire, '
-            'then restart it.\n\n$error',
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ),
-    ),
-  );
 }
 
 class SellerApp extends ConsumerStatefulWidget {
@@ -60,38 +25,99 @@ class SellerApp extends ConsumerStatefulWidget {
 
 class _SellerAppState extends ConsumerState<SellerApp> {
   bool signedIn = false;
+  bool demoMode = false;
+  bool restoringSession = true;
   int selectedTab = 0;
   String name = 'Rahul';
   String store = 'Bandel Traders';
   String contact = '98765 43210';
   String location = 'Bandel, West Bengal';
   List<Product> products = DemoStore.products;
+  String? productCursor;
+  String? loginError;
   bool loading = false;
+  int _productLoadGeneration = 0;
 
-  Future<void> _signInWithFirebase(AppUser user) async {
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_restoreSession());
+  }
+
+  Future<void> _restoreSession() async {
+    try {
+      final user = await ref
+          .read(authRepositoryProvider)
+          .restore(expectedRole: 'seller');
+      if (user != null && mounted) await _signInWithApi(user);
+    } catch (error) {
+      if (mounted) setState(() => loginError = appErrorMessage(error));
+    } finally {
+      if (mounted) setState(() => restoringSession = false);
+    }
+  }
+
+  Future<void> _signInWithApi(AppUser user) async {
     setState(() => loading = true);
     try {
-      final repository = ref.read(firebaseRepositoryProvider);
+      final repository = ref.read(apiRepositoryProvider);
       final profile = await repository.me();
-      final loadedProducts = await repository.products();
+      final page = await repository.products(forceRefresh: true);
       if (!mounted) return;
       setState(() {
         name = profile.name.isEmpty ? user.name : profile.name;
         store = profile.storeName;
         contact = profile.contact;
         location = profile.location;
-        products = loadedProducts;
+        products = page.items;
+        productCursor = page.nextCursor;
+        demoMode = false;
         signedIn = true;
       });
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(appErrorMessage(error))));
+        await ref.read(authRepositoryProvider).signOut();
+        setState(() => loginError = appErrorMessage(error));
       }
     } finally {
       if (mounted) setState(() => loading = false);
     }
+  }
+
+  Future<void> _signOut() async {
+    if (!demoMode) {
+      try {
+        await ref.read(authRepositoryProvider).signOut();
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(appErrorMessage(error))));
+        }
+      }
+    }
+    if (mounted) {
+      setState(() {
+        signedIn = false;
+        demoMode = false;
+      });
+    }
+  }
+
+  Future<void> _loadProducts({
+    String query = '',
+    String? cursor,
+    bool append = false,
+  }) async {
+    final generation = ++_productLoadGeneration;
+    final page = await ref
+        .read(apiRepositoryProvider)
+        .products(query: query, cursor: cursor, forceRefresh: true);
+    if (!mounted || generation != _productLoadGeneration) return;
+    setState(() {
+      products = append ? [...products, ...page.items] : page.items;
+      productCursor = page.nextCursor;
+    });
   }
 
   @override
@@ -112,10 +138,16 @@ class _SellerAppState extends ConsumerState<SellerApp> {
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(9)),
       ),
     ),
-    home: !signedIn
+    home: restoringSession
+        ? const Scaffold(body: Center(child: CircularProgressIndicator()))
+        : !signedIn
         ? LoginScreen(
-            onContinue: () => setState(() => signedIn = true),
-            onAuthenticated: _signInWithFirebase,
+            initialError: loginError,
+            onContinue: () => setState(() {
+              demoMode = true;
+              signedIn = true;
+            }),
+            onAuthenticated: _signInWithApi,
           )
         : Scaffold(
             appBar: AppBar(
@@ -123,12 +155,7 @@ class _SellerAppState extends ConsumerState<SellerApp> {
               actions: [
                 IconButton(
                   tooltip: 'Sign out',
-                  onPressed: () {
-                    if (firebaseConfigured) {
-                      unawaited(ref.read(authRepositoryProvider).signOut());
-                    }
-                    setState(() => signedIn = false);
-                  },
+                  onPressed: _signOut,
                   icon: const Icon(Icons.logout),
                 ),
               ],
@@ -141,9 +168,14 @@ class _SellerAppState extends ConsumerState<SellerApp> {
                     store: store,
                     contact: contact,
                     location: location,
-                    products: firebaseConfigured ? products : null,
-                    onSubmitSale: firebaseConfigured
-                        ? ({
+                    products: demoMode ? null : products,
+                    onSearchProducts: demoMode
+                        ? null
+                        : (query) => _loadProducts(query: query),
+                    onRefreshProducts: demoMode ? null : () => _loadProducts(),
+                    onSubmitSale: demoMode
+                        ? null
+                        : ({
                             required String requestId,
                             required Product product,
                             required int quantity,
@@ -152,9 +184,7 @@ class _SellerAppState extends ConsumerState<SellerApp> {
                             required String contact,
                             required String location,
                           }) async {
-                            final repository = ref.read(
-                              firebaseRepositoryProvider,
-                            );
+                            final repository = ref.read(apiRepositoryProvider);
                             await repository.submitSale(
                               requestId: requestId,
                               productId: product.id,
@@ -164,11 +194,14 @@ class _SellerAppState extends ConsumerState<SellerApp> {
                               contact: contact,
                               location: location,
                             );
-                            products = await repository.products();
+                            final page = await repository.products(
+                              forceRefresh: true,
+                            );
+                            products = page.items;
+                            productCursor = page.nextCursor;
                             if (mounted) setState(() {});
                             return products;
-                          }
-                        : null,
+                          },
                     onStoreChanged: (s, c, l) => setState(() {
                       store = s;
                       contact = c;
@@ -180,10 +213,10 @@ class _SellerAppState extends ConsumerState<SellerApp> {
                     store: store,
                     contact: contact,
                     location: location,
-                    onSaveRemote: firebaseConfigured
+                    onSaveRemote: !demoMode
                         ? (n, s, c, l) async {
                             await ref
-                                .read(firebaseRepositoryProvider)
+                                .read(apiRepositoryProvider)
                                 .updateProfile(
                                   name: n,
                                   store: s,
@@ -201,8 +234,11 @@ class _SellerAppState extends ConsumerState<SellerApp> {
                   ),
             bottomNavigationBar: NavigationBar(
               selectedIndex: selectedTab,
-              onDestinationSelected: (index) =>
-                  setState(() => selectedTab = index),
+              onDestinationSelected: (index) {
+                if (index < 0 || index > 1 || index == selectedTab) return;
+                setState(() => selectedTab = index);
+                if (index == 0 && !demoMode) unawaited(_loadProducts());
+              },
               destinations: const [
                 NavigationDestination(
                   icon: Icon(Icons.add_box_outlined),

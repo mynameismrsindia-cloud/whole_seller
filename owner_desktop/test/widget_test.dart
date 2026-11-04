@@ -119,6 +119,12 @@ void main() {
     expect(find.byType(NavigationBar), findsOneWidget);
     expect(tester.takeException(), isNull);
 
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    expect(find.text('Profile'), findsWidgets);
+    expect(find.byType(ProfileScreen), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
     await tester.tap(find.text('Sales').last);
     await tester.pumpAndSettle();
     expect(find.text('Sales Entries'), findsWidgets);

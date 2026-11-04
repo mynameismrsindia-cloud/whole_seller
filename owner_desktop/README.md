@@ -1,33 +1,28 @@
 # Owner Desktop
 
-Owner app for inventory, restocking, sales review, order approval, and profile
-management. Firebase Authentication with Google and Cloud Firestore are already
-configured for project `wholesale-mrsindia-2026`; no Node.js API or MySQL is
-required.
+Flutter Windows desktop app for managing products, profiles, and sales. It
+connects to the NestJS + PostgreSQL API; Firebase Auth, Firestore, and
+Google Sign-In are not required.
 
-The owner account is `mynameismrsindia@gmail.com`. From the repository root,
-deploy updated Firestore rules/indexes with:
+On Windows, install Flutter's Windows desktop prerequisites, then run:
 
-```sh
-firebase deploy --only firestore --project=wholesale-mrsindia-2026
-```
-
-```sh
+```powershell
 flutter pub get
-flutter run -d windows
-flutter build windows
-flutter run -d <android-device>
-flutter build apk
+flutter run -d windows --dart-define=API_BASE_URL=https://api.example.com/api/v1
+flutter analyze
 flutter test
 ```
 
-To create a Windows installer from a non-Windows computer, push the project to
-GitHub, open **Actions → Build owner Windows app → Run workflow**, then download
-the `owner-desktop-Setup` artifact. Run `owner-desktop-Setup.exe` on Windows.
-It installs the complete app bundle, creates Start Menu and Desktop shortcuts,
-and installs Microsoft's signed Visual C++ x64 Redistributable when the
-required version is missing. If the runtime requires a restart, Setup will
-prompt to restart Windows. The app can then be opened from either shortcut.
+For a release build:
 
-Firebase app configuration is in `lib/firebase_options.dart` and
-`android/app/google-services.json`.
+```powershell
+flutter build windows --release --dart-define=API_BASE_URL=https://api.example.com/api/v1
+```
+
+Owner accounts are provisioned privately by the API administrator. There is no
+Owner sign-up option in the app. The GitHub Actions Windows workflow requires
+the repository variable `API_BASE_URL` to contain the deployed API's HTTPS
+URL. It produces an installer artifact with the app and Visual C++ runtime.
+
+See the repository README for API deployment, database, Owner provisioning,
+and the Firebase data migration limitation.

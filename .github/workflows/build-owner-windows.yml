@@ -2,6 +2,15 @@ name: Build owner Windows app
 
 on:
   workflow_dispatch:
+    inputs:
+      environment:
+        description: API environment for this installer
+        type: choice
+        options:
+          - production
+          - localhost
+        default: production
+        required: true
 
 permissions:
   contents: read
@@ -18,9 +27,21 @@ jobs:
           cache: true
       - name: Build Windows release
         working-directory: owner_desktop
+        env:
+          API_ENVIRONMENT: ${{ inputs.environment }}
+          PRODUCTION_API_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL || vars.API_BASE_URL }}
         run: |
+          if ($env:API_ENVIRONMENT -eq 'localhost') {
+            $apiBaseUrl = 'http://127.0.0.1:3000/api/v1'
+          } else {
+            $apiBaseUrl = $env:PRODUCTION_API_BASE_URL
+            if ([string]::IsNullOrWhiteSpace($apiBaseUrl) -or
+                -not $apiBaseUrl.StartsWith('https://')) {
+              throw 'Set PRODUCTION_API_BASE_URL (or legacy API_BASE_URL) to the deployed HTTPS API URL.'
+            }
+          }
           flutter pub get
-          flutter build windows --release
+          flutter build windows --release --dart-define=API_BASE_URL=$apiBaseUrl
       - name: Download and verify Microsoft Visual C++ Redistributable
         shell: pwsh
         run: |

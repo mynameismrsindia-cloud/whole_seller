@@ -18,9 +18,15 @@ jobs:
           cache: true
       - name: Build seller release APK
         working-directory: seller_app
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
         run: |
+          if [ -z "$API_BASE_URL" ] || [[ "$API_BASE_URL" != https://* ]]; then
+            echo "Set the API_BASE_URL repository variable to the deployed HTTPS API URL."
+            exit 1
+          fi
           flutter pub get
-          flutter build apk --release
+          flutter build apk --release --dart-define=API_BASE_URL=$API_BASE_URL
       - uses: actions/upload-artifact@v4
         with:
           name: seller-app-android-apk

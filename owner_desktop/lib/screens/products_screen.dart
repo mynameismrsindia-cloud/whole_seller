@@ -1,9 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../models/product.dart';
 import 'add_product_screen.dart';
 
-class ProductsScreen extends StatelessWidget {
+class ProductsScreen extends StatefulWidget {
   const ProductsScreen({
     super.key,
     required this.products,
@@ -11,6 +13,9 @@ class ProductsScreen extends StatelessWidget {
     required this.onUpdate,
     required this.onRestock,
     required this.onSetActive,
+    this.onSearch,
+    this.onLoadMore,
+    this.onRefresh,
   });
 
   final List<Product> products;
@@ -18,6 +23,47 @@ class ProductsScreen extends StatelessWidget {
   final void Function(Product, String) onUpdate;
   final void Function(Product, int) onRestock;
   final void Function(Product, bool) onSetActive;
+  final Future<void> Function(String)? onSearch;
+  final Future<void> Function()? onLoadMore;
+  final Future<void> Function()? onRefresh;
+
+  @override
+  State<ProductsScreen> createState() => _ProductsScreenState();
+}
+
+class _ProductsScreenState extends State<ProductsScreen> {
+  final search = TextEditingController();
+  Timer? debounce;
+  bool searching = false;
+  int searchGeneration = 0;
+
+  @override
+  void dispose() {
+    debounce?.cancel();
+    search.dispose();
+    super.dispose();
+  }
+
+  void _search(String value) {
+    debounce?.cancel();
+    final generation = ++searchGeneration;
+    debounce = Timer(const Duration(milliseconds: 350), () async {
+      try {
+        setState(() => searching = true);
+        await widget.onSearch?.call(value.trim());
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(error.toString())));
+        }
+      } finally {
+        if (mounted && generation == searchGeneration) {
+          setState(() => searching = false);
+        }
+      }
+    });
+  }
 
   Future<void> _add(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -26,13 +72,13 @@ class ProductsScreen extends StatelessWidget {
     );
     if (!messenger.mounted) return;
     if (product == null) return;
-    if (products.any((existing) => existing.id == product.id)) {
+    if (widget.products.any((existing) => existing.id == product.id)) {
       messenger.showSnackBar(
         const SnackBar(content: Text('Product ID already exists.')),
       );
       return;
     }
-    onAdd(product);
+    widget.onAdd(product);
   }
 
   Future<void> _edit(BuildContext context, Product product) async {
@@ -41,7 +87,7 @@ class ProductsScreen extends StatelessWidget {
       builder: (_) => _EditProductDialog(product: product),
     );
     if (updatedName != null && updatedName.trim().isNotEmpty) {
-      onUpdate(product, updatedName.trim());
+      widget.onUpdate(product, updatedName.trim());
     }
   }
 
@@ -79,7 +125,7 @@ class ProductsScreen extends StatelessWidget {
                 quantityKey.currentState?.value?.trim() ?? '',
               );
               if (parsedQuantity == null || parsedQuantity <= 0) return;
-              onRestock(product, parsedQuantity);
+              widget.onRestock(product, parsedQuantity);
               Navigator.pop(context);
             },
             child: const Text('Add stock'),
@@ -104,6 +150,22 @@ class ProductsScreen extends StatelessWidget {
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                 ),
               ),
+              if (widget.onRefresh != null)
+                IconButton(
+                  tooltip: 'Refresh products',
+                  onPressed: () async {
+                    try {
+                      await widget.onRefresh!.call();
+                    } catch (error) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(error.toString())),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.refresh),
+                ),
               FilledButton.icon(
                 onPressed: () => _add(context),
                 icon: const Icon(Icons.add),
@@ -111,8 +173,30 @@ class ProductsScreen extends StatelessWidget {
               ),
             ],
           ),
+          if (widget.onSearch != null) ...[
+            const SizedBox(height: 12),
+            TextField(
+              key: const Key('owner-product-search'),
+              controller: search,
+              decoration: InputDecoration(
+                hintText: 'Search products',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: searching
+                    ? const Padding(
+                        padding: EdgeInsets.all(14),
+                        child: SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : null,
+              ),
+              onChanged: _search,
+            ),
+          ],
           const SizedBox(height: 16),
-          if (products.isEmpty)
+          if (widget.products.isEmpty)
             const Padding(
               padding: EdgeInsets.all(30),
               child: Text(
@@ -131,7 +215,7 @@ class ProductsScreen extends StatelessWidget {
                   DataColumn(label: Text('Status')),
                   DataColumn(label: Text('Actions')),
                 ],
-                rows: products.map((product) {
+                rows: widget.products.map((product) {
                   return DataRow(
                     cells: [
                       DataCell(Text(product.id)),
@@ -177,7 +261,8 @@ class ProductsScreen extends StatelessWidget {
                             ),
                             Switch.adaptive(
                               value: product.active,
-                              onChanged: (value) => onSetActive(product, value),
+                              onChanged: (value) =>
+                                  widget.onSetActive(product, value),
                             ),
                           ],
                         ),
@@ -185,6 +270,24 @@ class ProductsScreen extends StatelessWidget {
                     ],
                   );
                 }).toList(),
+              ),
+            ),
+          if (widget.onLoadMore != null)
+            Align(
+              alignment: Alignment.center,
+              child: TextButton(
+                onPressed: () async {
+                  try {
+                    await widget.onLoadMore!.call();
+                  } catch (error) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text(error.toString())));
+                    }
+                  }
+                },
+                child: const Text('Load more products'),
               ),
             ),
         ],

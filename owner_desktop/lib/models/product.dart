@@ -45,6 +45,7 @@ class Sale {
   final String productName;
   final int quantity;
   final int rate;
+  int get totalAmount => quantity * rate;
   final DateTime createdAt;
   OrderStatus orderStatus;
 

@@ -1,10 +1,8 @@
 import 'dart:async';
 
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'firebase_options.dart';
 import 'models/app_user.dart';
 import 'models/product.dart';
 import 'screens/login_screen.dart';
@@ -16,40 +14,7 @@ import 'services/providers.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-  } catch (error, stackTrace) {
-    FlutterError.reportError(
-      FlutterErrorDetails(exception: error, stack: stackTrace),
-    );
-    runApp(_FirebaseSetupErrorApp(error: error));
-    return;
-  }
   runApp(const ProviderScope(child: OwnerApp()));
-}
-
-class _FirebaseSetupErrorApp extends StatelessWidget {
-  const _FirebaseSetupErrorApp({required this.error});
-
-  final Object error;
-
-  @override
-  Widget build(BuildContext context) => MaterialApp(
-    home: Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: SelectableText(
-            'Firebase setup failed. Configure this app with FlutterFire, '
-            'then restart it.\n\n$error',
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ),
-    ),
-  );
 }
 
 class OwnerApp extends ConsumerStatefulWidget {
@@ -61,6 +26,8 @@ class OwnerApp extends ConsumerStatefulWidget {
 
 class _OwnerAppState extends ConsumerState<OwnerApp> {
   bool signedIn = false;
+  bool demoMode = false;
+  bool restoringSession = true;
   int page = 0;
   String name = 'Store Owner';
   String store = 'Bandel Traders';
@@ -68,34 +35,123 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
   String location = 'Bandel, West Bengal';
   List<Product> products = DemoStore.products;
   List<Sale> sales = DemoStore.sales;
+  String? productCursor;
+  String? salesCursor;
+  DateTimeRange? salesRange;
+  String activeProductQuery = '';
+  String? loginError;
   bool loading = false;
+  int _productLoadGeneration = 0;
+  int _salesLoadGeneration = 0;
 
-  Future<void> _signInWithFirebase(AppUser user) async {
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_restoreSession());
+  }
+
+  Future<void> _restoreSession() async {
+    try {
+      final user = await ref
+          .read(authRepositoryProvider)
+          .restore(expectedRole: 'owner');
+      if (user != null && mounted) await _signInWithApi(user);
+    } catch (error) {
+      if (mounted) setState(() => loginError = appErrorMessage(error));
+    } finally {
+      if (mounted) setState(() => restoringSession = false);
+    }
+  }
+
+  Future<void> _signInWithApi(AppUser user) async {
     setState(() => loading = true);
     try {
-      final repository = ref.read(firebaseRepositoryProvider);
+      final repository = ref.read(apiRepositoryProvider);
       final profile = await repository.me();
-      final loadedProducts = await repository.products();
-      final loadedSales = await repository.sales();
+      final productPage = await repository.products(forceRefresh: true);
+      final salePage = await repository.sales();
       if (!mounted) return;
       setState(() {
         name = profile.name.isEmpty ? user.name : profile.name;
         store = profile.storeName;
         contact = profile.contact;
         location = profile.location;
-        products = loadedProducts;
-        sales = loadedSales;
+        products = productPage.items;
+        productCursor = productPage.nextCursor;
+        sales = salePage.items;
+        salesCursor = salePage.nextCursor;
+        demoMode = false;
         signedIn = true;
       });
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(appErrorMessage(error))));
+        await ref.read(authRepositoryProvider).signOut();
+        setState(() => loginError = appErrorMessage(error));
       }
     } finally {
       if (mounted) setState(() => loading = false);
     }
+  }
+
+  Future<void> _signOut() async {
+    if (!demoMode) {
+      try {
+        await ref.read(authRepositoryProvider).signOut();
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(appErrorMessage(error))));
+        }
+      }
+    }
+    if (mounted) {
+      setState(() {
+        signedIn = false;
+        demoMode = false;
+      });
+    }
+  }
+
+  Future<void> _loadProducts({
+    String query = '',
+    String? cursor,
+    bool append = false,
+    bool forceRefresh = true,
+  }) async {
+    final generation = ++_productLoadGeneration;
+    if (!append) activeProductQuery = query;
+    final loaded = await ref
+        .read(apiRepositoryProvider)
+        .products(query: query, cursor: cursor, forceRefresh: forceRefresh);
+    if (!mounted || generation != _productLoadGeneration) return;
+    setState(() {
+      products = append ? [...products, ...loaded.items] : loaded.items;
+      productCursor = loaded.nextCursor;
+    });
+  }
+
+  Future<void> _loadSales({
+    DateTimeRange? range,
+    String? cursor,
+    bool append = false,
+  }) async {
+    final generation = ++_salesLoadGeneration;
+    final start = range == null
+        ? null
+        : DateTime(range.start.year, range.start.month, range.start.day);
+    final end = range == null
+        ? null
+        : DateTime(range.end.year, range.end.month, range.end.day + 1);
+    final loaded = await ref
+        .read(apiRepositoryProvider)
+        .sales(start: start, end: end, cursor: cursor);
+    if (!mounted || generation != _salesLoadGeneration) return;
+    setState(() {
+      sales = append ? [...sales, ...loaded.items] : loaded.items;
+      salesCursor = loaded.nextCursor;
+      salesRange = range;
+    });
   }
 
   Future<void> _runRemote(Future<void> Function() action) async {
@@ -111,19 +167,18 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
   }
 
   Future<void> _createProduct(Product product) async {
-    if (!firebaseConfigured) {
+    if (demoMode) {
       setState(() => DemoStore.products.insert(0, product));
       return;
     }
     await _runRemote(() async {
-      await ref.read(firebaseRepositoryProvider).createProduct(product);
-      final updated = await ref.read(firebaseRepositoryProvider).products();
-      if (mounted) setState(() => products = updated);
+      await ref.read(apiRepositoryProvider).createProduct(product);
+      await _loadProducts(forceRefresh: true);
     });
   }
 
   Future<void> _updateProduct(Product product, String newName) async {
-    if (!firebaseConfigured) {
+    if (demoMode) {
       setState(() => product.name = newName);
       return;
     }
@@ -131,12 +186,8 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
     product.name = newName;
     await _runRemote(() async {
       try {
-        await ref.read(firebaseRepositoryProvider).updateProduct(
-          product,
-          newName,
-        );
-        final updated = await ref.read(firebaseRepositoryProvider).products();
-        if (mounted) setState(() => products = updated);
+        await ref.read(apiRepositoryProvider).updateProduct(product, newName);
+        await _loadProducts(forceRefresh: true);
       } catch (_) {
         product.name = oldName;
         rethrow;
@@ -145,21 +196,20 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
   }
 
   Future<void> _restockProduct(Product product, int quantity) async {
-    if (!firebaseConfigured) {
+    if (demoMode) {
       setState(() => product.quantity += quantity);
       return;
     }
     await _runRemote(() async {
       await ref
-          .read(firebaseRepositoryProvider)
+          .read(apiRepositoryProvider)
           .restockProduct(product.id, quantity);
-      final updated = await ref.read(firebaseRepositoryProvider).products();
-      if (mounted) setState(() => products = updated);
+      await _loadProducts(forceRefresh: true);
     });
   }
 
   Future<void> _setProductActive(Product product, bool active) async {
-    if (!firebaseConfigured) {
+    if (demoMode) {
       setState(() => product.active = active);
       return;
     }
@@ -167,12 +217,10 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
     product.active = active;
     await _runRemote(() async {
       try {
-        await ref.read(firebaseRepositoryProvider).updateProduct(
-          product,
-          product.name,
-        );
-        final updated = await ref.read(firebaseRepositoryProvider).products();
-        if (mounted) setState(() => products = updated);
+        await ref
+            .read(apiRepositoryProvider)
+            .updateProduct(product, product.name);
+        await _loadProducts(forceRefresh: true);
       } catch (_) {
         product.active = oldValue;
         rethrow;
@@ -181,16 +229,13 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
   }
 
   Future<void> _setSaleStatus(Sale sale, OrderStatus status) async {
-    if (!firebaseConfigured) {
+    if (demoMode) {
       setState(() => sale.orderStatus = status);
       return;
     }
     await _runRemote(() async {
-      await ref
-          .read(firebaseRepositoryProvider)
-          .updateSaleStatus(sale, status);
-      final updated = await ref.read(firebaseRepositoryProvider).sales();
-      if (mounted) setState(() => sales = updated);
+      await ref.read(apiRepositoryProvider).updateSaleStatus(sale, status);
+      await _loadSales(range: salesRange);
     });
   }
 
@@ -200,6 +245,17 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
     'Profile',
   ][page.clamp(0, 2).toInt()];
 
+  void _selectPage(int selected) {
+    if (selected < 0 || selected > 2 || selected == page) return;
+    setState(() => page = selected);
+    if (demoMode) return;
+    if (selected == 0) {
+      unawaited(_loadProducts(forceRefresh: true));
+    } else if (selected == 1) {
+      unawaited(_loadSales(range: salesRange));
+    }
+  }
+
   Widget _pageContent() => switch (page) {
     0 => ProductsScreen(
       products: products,
@@ -207,17 +263,41 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
       onUpdate: _updateProduct,
       onRestock: _restockProduct,
       onSetActive: _setProductActive,
+      onSearch: demoMode ? null : (query) => _loadProducts(query: query),
+      onLoadMore: productCursor == null
+          ? null
+          : () => _loadProducts(
+              query: activeProductQuery,
+              cursor: productCursor,
+              append: true,
+              forceRefresh: false,
+            ),
+      onRefresh: demoMode ? null : () => _loadProducts(forceRefresh: true),
     ),
-    1 => SalesListScreen(sales: sales, onStatusChanged: _setSaleStatus),
+    1 => SalesListScreen(
+      sales: sales,
+      onStatusChanged: _setSaleStatus,
+      initialRange: salesRange,
+      hasMore: salesCursor != null,
+      onRangeChanged: (range) => _loadSales(range: range),
+      onLoadMore: salesCursor == null
+          ? null
+          : () => _loadSales(
+              range: salesRange,
+              cursor: salesCursor,
+              append: true,
+            ),
+      onRefresh: () => _loadSales(range: salesRange),
+    ),
     _ => ProfileScreen(
       name: name,
       store: store,
       contact: contact,
       location: location,
-      onSaveRemote: firebaseConfigured
+      onSaveRemote: !demoMode
           ? (n, s, c, l) async {
               await ref
-                  .read(firebaseRepositoryProvider)
+                  .read(apiRepositoryProvider)
                   .updateProfile(name: n, store: s, contact: c, location: l);
             }
           : null,
@@ -236,12 +316,7 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
       actions: [
         IconButton(
           tooltip: 'Sign out',
-          onPressed: () {
-            if (firebaseConfigured) {
-              unawaited(ref.read(authRepositoryProvider).signOut());
-            }
-            setState(() => signedIn = false);
-          },
+          onPressed: _signOut,
           icon: const Icon(Icons.logout),
         ),
       ],
@@ -254,7 +329,7 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
           ),
     bottomNavigationBar: NavigationBar(
       selectedIndex: page.clamp(0, 2).toInt(),
-      onDestinationSelected: (index) => setState(() => page = index),
+      onDestinationSelected: _selectPage,
       destinations: const [
         NavigationDestination(
           icon: Icon(Icons.inventory_2_outlined),
@@ -279,7 +354,7 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
           extended: extended,
           backgroundColor: const Color(0xFF004D46),
           selectedIndex: page.clamp(0, 2).toInt(),
-          onDestinationSelected: (index) => setState(() => page = index),
+          onDestinationSelected: _selectPage,
           unselectedIconTheme: const IconThemeData(color: Colors.white70),
           selectedIconTheme: const IconThemeData(color: Colors.white),
           unselectedLabelTextStyle: const TextStyle(color: Colors.white70),
@@ -314,12 +389,7 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
               alignment: Alignment.bottomCenter,
               child: IconButton(
                 tooltip: 'Sign out',
-                onPressed: () {
-                  if (firebaseConfigured) {
-                    unawaited(ref.read(authRepositoryProvider).signOut());
-                  }
-                  setState(() => signedIn = false);
-                },
+                onPressed: _signOut,
                 icon: const Icon(Icons.logout, color: Colors.white),
               ),
             ),
@@ -381,10 +451,16 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(9)),
       ),
     ),
-    home: !signedIn
+    home: restoringSession
+        ? const Scaffold(body: Center(child: CircularProgressIndicator()))
+        : !signedIn
         ? LoginScreen(
-            onContinue: () => setState(() => signedIn = true),
-            onAuthenticated: _signInWithFirebase,
+            initialError: loginError,
+            onContinue: () => setState(() {
+              demoMode = true;
+              signedIn = true;
+            }),
+            onAuthenticated: _signInWithApi,
           )
         : loading
         ? const Scaffold(body: Center(child: CircularProgressIndicator()))

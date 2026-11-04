@@ -1,260 +1,148 @@
-import 'dart:io';
-
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 
 import '../models/app_user.dart';
 import '../models/product.dart';
+import 'wholesale_api_client.dart';
 
-const ownerEmail = 'mynameismrsindia@gmail.com';
-final firebaseConfigured = Firebase.apps.isNotEmpty;
-
-String appErrorMessage(Object error) {
-  if (error is FirebaseAuthException) {
-    return error.message ?? 'Firebase sign-in failed (${error.code}).';
-  }
-  if (error is FirebaseException) {
-    return error.message ?? 'Firebase error (${error.code}).';
-  }
-  if (error is StateError) return error.message;
-  return error.toString();
-}
-
-final firebaseAuthProvider = Provider<FirebaseAuth>(
-  (_) => FirebaseAuth.instance,
-);
-
-final firestoreProvider = Provider<FirebaseFirestore>(
-  (_) => FirebaseFirestore.instance,
-);
-
-final firebaseRepositoryProvider = Provider<FirebaseRepository>((ref) {
-  return FirebaseRepository(
-    ref.read(firebaseAuthProvider),
-    ref.read(firestoreProvider),
-  );
+final apiClientProvider = Provider<WholesaleApiClient>((ref) {
+  final client = WholesaleApiClient(storageKey: 'owner_refresh_token');
+  ref.onDispose(client.close);
+  return client;
 });
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  return AuthRepository(ref.read(firebaseRepositoryProvider));
+  return AuthRepository(ref.read(apiClientProvider));
 });
 
-class AuthRepository {
-  AuthRepository(this.repository);
+final apiRepositoryProvider = Provider<ApiRepository>((ref) {
+  return ApiRepository(ref.read(apiClientProvider));
+});
 
-  final FirebaseRepository repository;
-  bool _initialized = false;
+String appErrorMessage(Object error) => error.toString();
 
-  Future<AppUser> signIn({required String expectedRole}) async {
-    late final UserCredential result;
-    if (Platform.isWindows) {
-      result = await repository.auth.signInWithProvider(GoogleAuthProvider());
-    } else {
-      final signIn = GoogleSignIn.instance;
-      if (!_initialized) {
-        await signIn.initialize();
-        _initialized = true;
-      }
-      if (!signIn.supportsAuthenticate()) {
-        throw StateError('Google sign-in is unavailable on this platform.');
-      }
-      final account = await signIn.authenticate();
-      final idToken = account.authentication.idToken;
-      if (idToken == null || idToken.isEmpty) {
-        throw StateError(
-          'Google did not return an ID token. Check OAuth setup.',
-        );
-      }
-      final credential = GoogleAuthProvider.credential(idToken: idToken);
-      result = await repository.auth.signInWithCredential(credential);
-    }
-    final firebaseUser = result.user;
-    if (firebaseUser == null) {
-      throw StateError('Firebase did not return a signed-in user.');
-    }
+class ProductPage {
+  const ProductPage(this.items, this.nextCursor);
 
-    final user = await repository.loadOrCreateUser(firebaseUser);
-    if (user.role != expectedRole) {
-      await signOut();
-      throw StateError(
-        expectedRole == 'owner'
-            ? 'This Google account is not configured as the owner.'
-            : 'This account does not have salesman access.',
-      );
-    }
-    return user;
-  }
-
-  Future<void> signOut() async {
-    await repository.auth.signOut();
-    if (_initialized) await GoogleSignIn.instance.signOut();
-  }
+  final List<Product> items;
+  final String? nextCursor;
 }
 
-class FirebaseRepository {
-  FirebaseRepository(this.auth, this.firestore);
+class SalePage {
+  const SalePage(this.items, this.nextCursor);
 
-  final FirebaseAuth auth;
-  final FirebaseFirestore firestore;
+  final List<Sale> items;
+  final String? nextCursor;
+}
 
-  User get _currentUser {
-    final user = auth.currentUser;
-    if (user == null) throw StateError('Please sign in again.');
-    return user;
-  }
+class AuthRepository {
+  AuthRepository(this.api);
 
-  bool get _isOwner =>
-      _currentUser.email?.toLowerCase() == ownerEmail.toLowerCase();
+  final WholesaleApiClient api;
 
-  Future<AppUser> loadOrCreateUser(User user) async {
-    final userRef = firestore.collection('users').doc(user.uid);
-    final snapshot = await userRef.get();
-    if (!snapshot.exists) {
-      final email = user.email;
-      if (email == null || !user.emailVerified) {
-        throw StateError('Use a verified Google email to sign in.');
-      }
-      final role = email.toLowerCase() == ownerEmail.toLowerCase()
-          ? 'owner'
-          : 'seller';
-      await userRef.set({
-        'id': user.uid,
-        'email': email,
-        'name': user.displayName ?? '',
-        'role': role,
-        'storeName': '',
-        'contact': '',
-        'location': '',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-      return AppUser(
-        id: user.uid,
-        email: email,
-        name: user.displayName ?? '',
-        role: role,
+  Future<AppUser> signIn({
+    required String email,
+    required String password,
+    required String expectedRole,
+  }) async {
+    final user = await api.login(email: email, password: password);
+    if (user['role'] != expectedRole) {
+      await api.logout();
+      throw StateError(
+        expectedRole == 'owner'
+            ? 'This account does not have Owner access.'
+            : 'This account does not have Seller access.',
       );
     }
-    return AppUser.fromJson(snapshot.data()!);
+    return AppUser.fromJson(user);
   }
 
-  Future<AppUser> me() async {
-    final user = _currentUser;
-    final snapshot = await firestore.collection('users').doc(user.uid).get();
-    final data = snapshot.data();
-    if (data == null) throw StateError('The Firebase profile was not found.');
-    return AppUser.fromJson(data);
+  Future<AppUser?> restore({required String expectedRole}) async {
+    if (!await api.restoreSession()) return null;
+    final user = api.currentUser;
+    if (user == null || user['role'] != expectedRole) {
+      await api.logout();
+      return null;
+    }
+    return AppUser.fromJson(user);
   }
+
+  Future<void> signOut() => api.logout();
+}
+
+class ApiRepository {
+  ApiRepository(this.api);
+
+  final WholesaleApiClient api;
+
+  Future<AppUser> me() async => AppUser.fromJson(await api.profile());
 
   Future<AppUser> updateProfile({
     required String name,
     required String store,
     required String contact,
     required String location,
+  }) async => AppUser.fromJson(
+    await api.updateProfile(
+      name: name,
+      storeName: store,
+      contact: contact,
+      location: location,
+    ),
+  );
+
+  Future<ProductPage> products({
+    String query = '',
+    String? cursor,
+    bool forceRefresh = false,
   }) async {
-    await firestore.collection('users').doc(_currentUser.uid).update({
-      'name': name,
-      'storeName': store,
-      'contact': contact,
-      'location': location,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-    return me();
+    final page = await api.products(
+      query: query,
+      cursor: cursor,
+      forceRefresh: forceRefresh,
+    );
+    return ProductPage(
+      page.items.map(Product.fromJson).toList(growable: false),
+      page.nextCursor,
+    );
   }
 
-  Future<List<Product>> products() async {
-    Query<Map<String, dynamic>> query = firestore
-        .collection('products')
-        .orderBy('createdAt', descending: true);
-    if (!_isOwner) query = query.where('active', isEqualTo: true);
-    final snapshot = await query.get();
-    return snapshot.docs
-        .map(
-          (document) =>
-              Product.fromJson({...document.data(), 'id': document.id}),
-        )
-        .toList();
-  }
-
-  Future<Product> createProduct(Product product) async {
-    if (product.id.trim().isEmpty || product.id.contains('/')) {
-      throw StateError('Enter a product ID without a slash.');
-    }
-    if (product.name.trim().isEmpty || product.quantity < 0) {
-      throw StateError('Enter a product name and non-negative quantity.');
-    }
-    await firestore.collection('products').doc(product.id).set({
+  Future<void> createProduct(Product product) async {
+    await api.createProduct({
       'id': product.id,
       'name': product.name,
       'quantity': product.quantity,
       'active': product.active,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-    return product;
-  }
-
-  Future<void> updateProduct(Product product, String name) async {
-    await firestore.collection('products').doc(product.id).update({
-      'name': name,
-      'active': product.active,
-      'updatedAt': FieldValue.serverTimestamp(),
     });
   }
 
-  Future<void> restockProduct(String id, int quantity) async {
-    if (quantity <= 0) throw StateError('Restock quantity must be positive.');
-    final productRef = firestore.collection('products').doc(id);
-    await firestore.runTransaction((transaction) async {
-      final snapshot = await transaction.get(productRef);
-      final product = snapshot.data();
-      if (product == null) throw StateError('Product not found.');
-      transaction.update(productRef, {
-        'quantity': (product['quantity'] as int) + quantity,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    });
-  }
+  Future<void> updateProduct(Product product, String name) =>
+      api.updateProduct(product.id, name: name, active: product.active);
 
-  Future<List<Sale>> sales({DateTime? start, DateTime? end}) async {
-    Query<Map<String, dynamic>> query = firestore
-        .collection('sales')
-        .orderBy('createdAt', descending: true);
-    if (start != null) {
-      query = query.where(
-        'createdAt',
-        isGreaterThanOrEqualTo: Timestamp.fromDate(start.toUtc()),
-      );
-    }
-    if (end != null) {
-      query = query.where(
-        'createdAt',
-        isLessThan: Timestamp.fromDate(end.toUtc()),
-      );
-    }
-    final snapshot = await query.get();
-    return snapshot.docs.map((document) {
-      final data = document.data();
-      final createdAt = data['createdAt'];
-      return Sale.fromJson({
-        ...data,
-        'id': document.id,
-        'createdAt': createdAt is Timestamp
-            ? createdAt.toDate().toIso8601String()
-            : createdAt?.toString(),
-      });
-    }).toList();
+  Future<void> restockProduct(String id, int quantity) =>
+      api.restockProduct(id, quantity);
+
+  Future<SalePage> sales({
+    DateTime? start,
+    DateTime? end,
+    String? cursor,
+  }) async {
+    final page = await api.sales(
+      start: start?.toUtc().toIso8601String(),
+      end: end?.toUtc().toIso8601String(),
+      cursor: cursor,
+    );
+    return SalePage(
+      page.items.map(Sale.fromJson).toList(growable: false),
+      page.nextCursor,
+    );
   }
 
   Future<void> updateSaleStatus(Sale sale, OrderStatus status) async {
-    if (sale.orderStatus != OrderStatus.pending ||
-        status != OrderStatus.approved) {
-      throw StateError('An order can only be approved once.');
+    if (status != OrderStatus.approved) {
+      throw StateError('A sale can only be approved.');
     }
-    await firestore.collection('sales').doc(sale.id).update({
-      'orderStatus': status.name,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    await api.approveSale(sale.id);
   }
+
+  void invalidateProducts() => api.invalidateProducts();
 }

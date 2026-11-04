@@ -14,7 +14,9 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(const SellerApp());
-    await tester.tap(find.text('Continue with Google'));
+    await tester.ensureVisible(find.text('Open demo workspace'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open demo workspace'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
 
@@ -28,14 +30,32 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Google-style button opens the seller demo', (tester) async {
+  testWidgets('demo button opens the seller demo', (tester) async {
     await tester.pumpWidget(const SellerApp());
 
-    expect(find.text('Continue with Google'), findsOneWidget);
-    await tester.tap(find.text('Continue with Google'));
+    expect(find.text('Open demo workspace'), findsOneWidget);
+    await tester.tap(find.text('Open demo workspace'));
     await tester.pumpAndSettle();
 
     expect(find.text('New Sales Entry'), findsOneWidget);
+  });
+
+  testWidgets('seller navigation switches between entry and profile', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const SellerApp());
+    await tester.tap(find.text('Open demo workspace'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    expect(find.text('My Profile'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('New Entry'));
+    await tester.pumpAndSettle();
+    expect(find.text('New Sales Entry'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('profile does not show hardcoded support contact', (
@@ -61,7 +81,7 @@ void main() {
 
   testWidgets('seller can submit a demo sale', (tester) async {
     await tester.pumpWidget(const SellerApp());
-    await tester.tap(find.text('Continue with Google'));
+    await tester.tap(find.text('Open demo workspace'));
     await tester.pumpAndSettle();
 
     expect(find.text('New Sales Entry'), findsOneWidget);
@@ -84,7 +104,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(const SellerApp());
-    await tester.tap(find.text('Continue with Google'));
+    await tester.tap(find.text('Open demo workspace'));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(const Key('store-name')), '');

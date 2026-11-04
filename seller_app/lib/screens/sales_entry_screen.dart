@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
@@ -15,6 +17,8 @@ class SalesEntryScreen extends StatefulWidget {
     required this.location,
     required this.onStoreChanged,
     this.products,
+    this.onSearchProducts,
+    this.onRefreshProducts,
     this.onSubmitSale,
   });
 
@@ -24,6 +28,8 @@ class SalesEntryScreen extends StatefulWidget {
   final String location;
   final void Function(String, String, String) onStoreChanged;
   final List<Product>? products;
+  final Future<void> Function(String)? onSearchProducts;
+  final Future<void> Function()? onRefreshProducts;
   final Future<List<Product>> Function({
     required String requestId,
     required Product product,
@@ -44,6 +50,7 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
   late final store = TextEditingController(text: widget.store);
   late final contact = TextEditingController(text: widget.contact);
   late final location = TextEditingController(text: widget.location);
+  final search = TextEditingController();
   final quantity = TextEditingController();
   final rate = TextEditingController();
   Product? selected;
@@ -51,6 +58,9 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
   String requestId = const Uuid().v4();
   String? _requestFingerprint;
   bool submitting = false;
+  bool searching = false;
+  Timer? _searchDebounce;
+  int _searchGeneration = 0;
 
   @override
   void initState() {
@@ -81,6 +91,7 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
     store.dispose();
     contact.dispose();
     location.dispose();
+    search.dispose();
     quantity.dispose();
     rate.dispose();
     super.dispose();
@@ -170,6 +181,25 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text(message)));
 
+  void _searchProducts(String value) {
+    _searchDebounce?.cancel();
+    final generation = ++_searchGeneration;
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () async {
+      final callback = widget.onSearchProducts;
+      if (callback == null) return;
+      setState(() => searching = true);
+      try {
+        await callback(value.trim());
+      } catch (error) {
+        if (mounted) showMessage(appErrorMessage(error));
+      } finally {
+        if (mounted && generation == _searchGeneration) {
+          setState(() => searching = false);
+        }
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
@@ -196,6 +226,18 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
+                if (widget.onRefreshProducts != null)
+                  IconButton(
+                    tooltip: 'Refresh products',
+                    onPressed: () async {
+                      try {
+                        await widget.onRefreshProducts!.call();
+                      } catch (error) {
+                        if (mounted) showMessage(appErrorMessage(error));
+                      }
+                    },
+                    icon: const Icon(Icons.refresh),
+                  ),
               ],
             ),
             const SizedBox(height: 16),
@@ -228,29 +270,58 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
                   ),
                   LabeledField(
                     label: 'Product',
-                    child: DropdownButtonFormField<Product>(
-                      initialValue: selected,
-                      isExpanded: true,
-                      items: _availableProducts
-                          .map(
-                            (product) => DropdownMenuItem(
-                              value: product,
-                              enabled: product.active && product.quantity > 0,
-                              child: Text(
-                                '${product.name} — Remaining: ${product.quantity}'
-                                '${product.quantity == 0 ? ' · Unavailable' : ''}',
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                    child: Column(
+                      children: [
+                        if (widget.onSearchProducts != null)
+                          TextField(
+                            key: const Key('seller-product-search'),
+                            controller: search,
+                            decoration: InputDecoration(
+                              hintText: 'Search products',
+                              prefixIcon: const Icon(Icons.search),
+                              suffixIcon: searching
+                                  ? const Padding(
+                                      padding: EdgeInsets.all(14),
+                                      child: SizedBox(
+                                        height: 16,
+                                        width: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                    )
+                                  : null,
                             ),
-                          )
-                          .toList(),
-                      validator: (product) => product == null
-                          ? 'Select an available product'
-                          : null,
-                      onChanged: (product) => setState(() {
-                        selected = product;
-                        rate.text = product?.rate.toString() ?? '';
-                      }),
+                            onChanged: _searchProducts,
+                          ),
+                        if (widget.onSearchProducts != null)
+                          const SizedBox(height: 8),
+                        DropdownButtonFormField<Product>(
+                          initialValue: selected,
+                          isExpanded: true,
+                          items: _availableProducts
+                              .map(
+                                (product) => DropdownMenuItem(
+                                  value: product,
+                                  enabled:
+                                      product.active && product.quantity > 0,
+                                  child: Text(
+                                    '${product.name} — Remaining: ${product.quantity}'
+                                    '${product.quantity == 0 ? ' · Unavailable' : ''}',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          validator: (product) => product == null
+                              ? 'Select an available product'
+                              : null,
+                          onChanged: (product) => setState(() {
+                            selected = product;
+                            rate.text = product?.rate.toString() ?? '';
+                          }),
+                        ),
+                      ],
                     ),
                   ),
                   if (selected case final product?)

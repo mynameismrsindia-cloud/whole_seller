@@ -7,17 +7,27 @@ class SalesListScreen extends StatefulWidget {
     super.key,
     required this.sales,
     required this.onStatusChanged,
+    this.initialRange,
+    this.hasMore = false,
+    this.onRangeChanged,
+    this.onLoadMore,
+    this.onRefresh,
   });
 
   final List<Sale> sales;
   final void Function(Sale, OrderStatus) onStatusChanged;
+  final DateTimeRange? initialRange;
+  final bool hasMore;
+  final Future<void> Function(DateTimeRange?)? onRangeChanged;
+  final Future<void> Function()? onLoadMore;
+  final Future<void> Function()? onRefresh;
 
   @override
   State<SalesListScreen> createState() => _SalesListScreenState();
 }
 
 class _SalesListScreenState extends State<SalesListScreen> {
-  DateTimeRange? range;
+  late DateTimeRange? range = widget.initialRange;
 
   @override
   Widget build(BuildContext context) {
@@ -52,6 +62,22 @@ class _SalesListScreenState extends State<SalesListScreen> {
                     style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                   ),
                 ),
+                if (widget.onRefresh != null)
+                  IconButton(
+                    tooltip: 'Refresh sales',
+                    onPressed: () async {
+                      try {
+                        await widget.onRefresh!.call();
+                      } catch (error) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(error.toString())),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.refresh),
+                  ),
                 OutlinedButton.icon(
                   onPressed: () async {
                     final selected = await showDateRangePicker(
@@ -60,7 +86,10 @@ class _SalesListScreenState extends State<SalesListScreen> {
                       firstDate: DateTime(2020),
                       lastDate: DateTime(2035),
                     );
-                    if (selected != null) setState(() => range = selected);
+                    if (selected != null) {
+                      setState(() => range = selected);
+                      await widget.onRangeChanged?.call(selected);
+                    }
                   },
                   icon: const Icon(Icons.calendar_today_outlined),
                   label: Text(
@@ -73,7 +102,10 @@ class _SalesListScreenState extends State<SalesListScreen> {
                 if (selectedRange != null)
                   IconButton(
                     tooltip: 'Clear filter',
-                    onPressed: () => setState(() => range = null),
+                    onPressed: () {
+                      setState(() => range = null);
+                      widget.onRangeChanged?.call(null);
+                    },
                     icon: const Icon(Icons.close),
                   ),
               ],
@@ -101,6 +133,7 @@ class _SalesListScreenState extends State<SalesListScreen> {
                     DataColumn(label: Text('Product')),
                     DataColumn(label: Text('Qty')),
                     DataColumn(label: Text('Rate')),
+                    DataColumn(label: Text('Total')),
                     DataColumn(label: Text('Order status')),
                   ],
                   rows: visible.map((sale) {
@@ -121,6 +154,7 @@ class _SalesListScreenState extends State<SalesListScreen> {
                         ),
                         DataCell(Text('${sale.quantity}')),
                         DataCell(Text('₹${sale.rate}')),
+                        DataCell(Text('₹${sale.totalAmount}')),
                         DataCell(
                           Row(
                             mainAxisSize: MainAxisSize.min,
@@ -160,6 +194,24 @@ class _SalesListScreenState extends State<SalesListScreen> {
                       ],
                     );
                   }).toList(),
+                ),
+              ),
+            if (widget.hasMore && widget.onLoadMore != null)
+              Align(
+                alignment: Alignment.center,
+                child: TextButton(
+                  onPressed: () async {
+                    try {
+                      await widget.onLoadMore!.call();
+                    } catch (error) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(error.toString())),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('Load more sales'),
                 ),
               ),
           ],

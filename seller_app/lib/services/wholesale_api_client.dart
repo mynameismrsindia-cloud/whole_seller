@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -11,9 +10,7 @@ const _productsTtl = Duration(seconds: 30);
 String get defaultApiBaseUrl {
   const configured = String.fromEnvironment('API_BASE_URL');
   if (configured.isNotEmpty) return configured;
-  return Platform.isAndroid
-      ? 'http://10.0.2.2:3000/api/v1'
-      : 'http://127.0.0.1:3000/api/v1';
+  return 'https://wholesellerbackend-production.up.railway.app/api/v1';
 }
 
 class ApiException implements Exception {

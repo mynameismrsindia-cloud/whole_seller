@@ -8,7 +8,6 @@ import 'models/product.dart';
 import 'screens/login_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/sales_entry_screen.dart';
-import 'services/demo_store.dart';
 import 'services/providers.dart';
 
 Future<void> main() async {
@@ -25,14 +24,14 @@ class SellerApp extends ConsumerStatefulWidget {
 
 class _SellerAppState extends ConsumerState<SellerApp> {
   bool signedIn = false;
-  bool demoMode = false;
   bool restoringSession = true;
   int selectedTab = 0;
-  String name = 'Rahul';
-  String store = 'Bandel Traders';
-  String contact = '98765 43210';
-  String location = 'Bandel, West Bengal';
-  List<Product> products = DemoStore.products;
+  String name = '';
+  String email = '';
+  String store = '';
+  String contact = '';
+  String location = '';
+  List<Product> products = [];
   String? productCursor;
   String? loginError;
   bool loading = false;
@@ -66,12 +65,12 @@ class _SellerAppState extends ConsumerState<SellerApp> {
       if (!mounted) return;
       setState(() {
         name = profile.name.isEmpty ? user.name : profile.name;
+        email = user.email;
         store = profile.storeName;
         contact = profile.contact;
         location = profile.location;
         products = page.items;
         productCursor = page.nextCursor;
-        demoMode = false;
         signedIn = true;
       });
     } catch (error) {
@@ -85,39 +84,38 @@ class _SellerAppState extends ConsumerState<SellerApp> {
   }
 
   Future<void> _signOut() async {
-    if (!demoMode) {
-      try {
-        await ref.read(authRepositoryProvider).signOut();
-      } catch (error) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(appErrorMessage(error))));
-        }
+    try {
+      await ref.read(authRepositoryProvider).signOut();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(appErrorMessage(error))));
       }
     }
     if (mounted) {
       setState(() {
         signedIn = false;
-        demoMode = false;
       });
     }
   }
 
-  Future<void> _loadProducts({
-    String query = '',
-    String? cursor,
-    bool append = false,
-  }) async {
+  Future<void> _loadProducts({String? cursor, bool append = false}) async {
     final generation = ++_productLoadGeneration;
     final page = await ref
         .read(apiRepositoryProvider)
-        .products(query: query, cursor: cursor, forceRefresh: true);
+        .products(cursor: cursor, forceRefresh: true);
     if (!mounted || generation != _productLoadGeneration) return;
     setState(() {
       products = append ? [...products, ...page.items] : page.items;
       productCursor = page.nextCursor;
     });
+  }
+
+  Future<void> _loadMoreProducts() async {
+    final cursor = productCursor;
+    if (cursor == null) return;
+    await _loadProducts(cursor: cursor, append: true);
   }
 
   @override
@@ -141,14 +139,7 @@ class _SellerAppState extends ConsumerState<SellerApp> {
     home: restoringSession
         ? const Scaffold(body: Center(child: CircularProgressIndicator()))
         : !signedIn
-        ? LoginScreen(
-            initialError: loginError,
-            onContinue: () => setState(() {
-              demoMode = true;
-              signedIn = true;
-            }),
-            onAuthenticated: _signInWithApi,
-          )
+        ? LoginScreen(initialError: loginError, onAuthenticated: _signInWithApi)
         : Scaffold(
             appBar: AppBar(
               title: Text(selectedTab == 0 ? 'New Sales Entry' : 'My Profile'),
@@ -168,76 +159,51 @@ class _SellerAppState extends ConsumerState<SellerApp> {
                     store: store,
                     contact: contact,
                     location: location,
-                    products: demoMode ? null : products,
-                    onSearchProducts: demoMode
-                        ? null
-                        : (query) => _loadProducts(query: query),
-                    onRefreshProducts: demoMode ? null : () => _loadProducts(),
-                    onSubmitSale: demoMode
-                        ? null
-                        : ({
-                            required String requestId,
-                            required Product product,
-                            required int quantity,
-                            required int rate,
-                            required String store,
-                            required String contact,
-                            required String location,
-                          }) async {
-                            final repository = ref.read(apiRepositoryProvider);
-                            await repository.submitSale(
-                              requestId: requestId,
-                              productId: product.id,
-                              quantity: quantity,
-                              rate: rate,
-                              store: store,
-                              contact: contact,
-                              location: location,
-                            );
-                            final page = await repository.products(
-                              forceRefresh: true,
-                            );
-                            products = page.items;
-                            productCursor = page.nextCursor;
-                            if (mounted) setState(() {});
-                            return products;
-                          },
+                    products: products,
+                    onRefreshProducts: _loadProducts,
+                    hasMoreProducts: productCursor != null,
+                    onLoadMoreProducts: _loadMoreProducts,
+                    onSubmitSale:
+                        ({
+                          required String requestId,
+                          required Product product,
+                          required int quantity,
+                          required int rate,
+                          required String store,
+                          required String contact,
+                          required String location,
+                        }) async {
+                          final repository = ref.read(apiRepositoryProvider);
+                          await repository.submitSale(
+                            requestId: requestId,
+                            productId: product.id,
+                            quantity: quantity,
+                            rate: rate,
+                            store: store,
+                            contact: contact,
+                            location: location,
+                          );
+                          final page = await repository.products(
+                            forceRefresh: true,
+                          );
+                          products = page.items;
+                          productCursor = page.nextCursor;
+                          if (mounted) setState(() {});
+                          return products;
+                        },
                     onStoreChanged: (s, c, l) => setState(() {
                       store = s;
                       contact = c;
                       location = l;
                     }),
                   )
-                : ProfileScreen(
-                    name: name,
-                    store: store,
-                    contact: contact,
-                    location: location,
-                    onSaveRemote: !demoMode
-                        ? (n, s, c, l) async {
-                            await ref
-                                .read(apiRepositoryProvider)
-                                .updateProfile(
-                                  name: n,
-                                  store: s,
-                                  contact: c,
-                                  location: l,
-                                );
-                          }
-                        : null,
-                    onSave: (n, s, c, l) => setState(() {
-                      name = n;
-                      store = s;
-                      contact = c;
-                      location = l;
-                    }),
-                  ),
+                : ProfileScreen(name: name, email: email),
             bottomNavigationBar: NavigationBar(
               selectedIndex: selectedTab,
               onDestinationSelected: (index) {
                 if (index < 0 || index > 1 || index == selectedTab) return;
                 setState(() => selectedTab = index);
-                if (index == 0 && !demoMode) unawaited(_loadProducts());
+                if (index == 0) unawaited(_loadProducts());
               },
               destinations: const [
                 NavigationDestination(

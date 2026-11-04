@@ -19,7 +19,7 @@ jobs:
       - name: Build seller release APK
         working-directory: seller_app
         env:
-          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          API_BASE_URL: ${{ vars.API_BASE_URL || 'https://wholesellerbackend-production.up.railway.app/api/v1' }}
         run: |
           if [ -z "$API_BASE_URL" ] || [[ "$API_BASE_URL" != https://* ]]; then
             echo "Set the API_BASE_URL repository variable to the deployed HTTPS API URL."

@@ -7,14 +7,8 @@ import '../models/app_user.dart';
 import '../services/providers.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({
-    super.key,
-    required this.onContinue,
-    this.onAuthenticated,
-    this.initialError,
-  });
+  const LoginScreen({super.key, this.onAuthenticated, this.initialError});
 
-  final VoidCallback onContinue;
   final FutureOr<void> Function(AppUser)? onAuthenticated;
   final String? initialError;
 
@@ -171,10 +165,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ? 'Already registered? Sign in'
                             : 'New Seller? Create an account',
                       ),
-                    ),
-                    OutlinedButton(
-                      onPressed: loading ? null : widget.onContinue,
-                      child: const Text('Open demo workspace'),
                     ),
                     if (error ?? widget.initialError case final message?)
                       Padding(

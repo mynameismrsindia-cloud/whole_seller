@@ -14,7 +14,7 @@ self-contained GitHub repository root for `whole_seller_backend`.
 3. Add these variables to the API service:
 
    ```text
-   DATABASE_URL=${{ Postgres.DATABASE_PRIVATE_URL }}
+   DATABASE_URL=${{ Postgres.DATABASE_URL }}
    DATABASE_SSL=false
    JWT_ACCESS_SECRET=<at-least-32-random-bytes>
    JWT_ACCESS_TTL=15m
@@ -22,17 +22,19 @@ self-contained GitHub repository root for `whole_seller_backend`.
    NODE_ENV=production
    ```
 
-   Generate the JWT secret locally with `openssl rand -base64 48`; enter it
-   directly in Railway and do not commit it. Check the PostgreSQL template's
-   connection instructions before changing `DATABASE_SSL`; if its private URL
-   requires TLS, configure TLS as required by that template.
+   Set `DATABASE_URL` on the API service (not just on the Postgres service), and
+   redeploy after changing variables. Generate the JWT secret locally with
+   `openssl rand -base64 48`; enter it directly in Railway and do not commit it.
+   Check the PostgreSQL template's connection instructions before changing
+   `DATABASE_SSL`; if its connection URL requires TLS, configure TLS as required
+   by that template.
 4. Generate a public HTTPS domain for the API service. Verify its
    `/api/v1/health` endpoint returns `{"status":"ok"}`. This endpoint checks
    database connectivity.
 5. Set the Flutter build environment to this API's URL ending in `/api/v1`.
 
-The app's private connection string stays on the server. Never place
-`DATABASE_PRIVATE_URL` in the Flutter app or public GitHub variables.
+The database connection string stays on the server. Never place `DATABASE_URL`
+in the Flutter app or public GitHub variables.
 
 ## Provision the first Owner
 

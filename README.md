@@ -29,24 +29,14 @@ The API listens on port 3000 under `/api/v1`. Use HTTPS for deployed API
 endpoints. Configure TLS at the hosting/reverse-proxy layer and set
 `DATABASE_SSL=true` when the PostgreSQL provider requires TLS.
 
-### Provision the Owner account
+### Owner accounts
 
-Public registration only creates Sellers. After migrating the database, run
-the one-time CLI with an administrator-controlled Owner email/name and a
-password of at least 14 characters:
-
-```sh
-cd api
-read -r OWNER_EMAIL
-read -r OWNER_NAME
-read -rs OWNER_PASSWORD
-export OWNER_EMAIL OWNER_NAME OWNER_PASSWORD
-npm run owner:create
-unset OWNER_EMAIL OWNER_NAME OWNER_PASSWORD
-```
-
-The password is Argon2id-hashed. Owner creation refuses an already-used email;
-there is no public Owner registration route.
+Owners can now register directly in the Owner desktop app, using the same
+name, email, and password flow as Seller registration. Owner registration
+creates an Owner role; Seller registration continues to create a Seller role.
+Both require a unique email and a password of at least 12 characters. The
+`owner:create` command remains available as an optional administrator
+provisioning path.
 
 ## Run the apps
 

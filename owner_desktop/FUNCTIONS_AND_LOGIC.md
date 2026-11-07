@@ -1,8 +1,9 @@
 # Owner Desktop: Features & Logic
 
 ## Sign-in and session
-- Owner signs in with email and password. There is no public Owner registration; an administrator provisions Owner accounts.
+- Owner signs in with email/password or registers with name, email, and password, like a Seller. Owner registration uses its own API endpoint and assigns the Owner role.
 - Login checks email format and non-empty password. The API verifies credentials and Owner role; a non-Owner session is rejected.
+- Password visibility can be toggled. Opting into **Remember password** saves the email and password in OS-backed secure storage on this device.
 - A saved session is restored at app start. The access token stays in memory; the refresh token is stored securely and rotated by the API.
 - Sign out revokes the refresh token and clears the local session.
 
@@ -14,18 +15,18 @@
 - Product mutations invalidate the product cache and refresh the list. API-side validation remains authoritative.
 
 ## Sales and approval
-- Sales list shows date/time, seller, store/contact/location, product, quantity, rate, total, and order status.
+- Sales list shows Indian date/time, seller, store/contact/location, product, quantity, rate, total, and order status. User IDs are not shown.
 - Entries are ordered newest first. Owner can filter by date range, clear the filter, refresh, and load additional pages.
 - Total is `quantity × rate`. A pending sale can be approved once; approved sales cannot be changed back to pending. The API enforces Owner authorization and the one-way status transition.
+- After approval succeeds, the row immediately changes to an Approved badge and its approval action is disabled.
 - Sales are submitted by the Seller app; the API records each sale and deducts stock transactionally, rejecting insufficient stock.
 
-## Owner profile and layout
-- Owner can edit and save name, store name, contact number, and location. All four fields are required.
-- Navigation provides Products, Sales Entries, and Profile. Layout switches between a mobile bottom navigation and a desktop navigation rail based on window width.
-- The workspace scrolls to support smaller screens.
+## Account and layout
+- The Profile page has been removed. The desktop navigation shows the signed-in owner's logo, name, and email, with Log out at the bottom.
+- Navigation provides Products and Sales Entries and adapts to the available window width.
+- The desktop workspace scrolls horizontally and vertically to support smaller windows.
 
-## API, pagination, and demo mode
+## API and pagination
 - Production API default: `https://wholesellerbackend-production.up.railway.app/api/v1`; set Flutter `--dart-define=API_BASE_URL=<URL>` to use another environment.
 - Product results are briefly cached and simultaneous identical requests are deduplicated. Sales and product lists are paginated rather than downloading all records at once.
-- **Open demo workspace** is still available on the login screen. Demo changes use sample in-memory data only and are not saved to the production API.
-
+- The app requires a valid Owner account; there is no demo workspace.

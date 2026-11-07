@@ -1,6 +1,6 @@
 # Owner Desktop
 
-Flutter Windows desktop app for managing products, profiles, and sales. It
+Flutter Windows desktop app for managing products and sales. It
 connects to the NestJS + PostgreSQL API; Firebase Auth, Firestore, and
 Google Sign-In are not required.
 

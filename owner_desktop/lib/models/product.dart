@@ -65,7 +65,8 @@ class Sale {
       quantity: int.tryParse(json['quantity']?.toString() ?? '') ?? 0,
       rate: int.tryParse(json['rate']?.toString() ?? '') ?? 0,
       createdAt: createdAt,
-      orderStatus: json['orderStatus'] == 'approved'
+      orderStatus:
+          json['orderStatus']?.toString().trim().toLowerCase() == 'approved'
           ? OrderStatus.approved
           : OrderStatus.pending,
     );

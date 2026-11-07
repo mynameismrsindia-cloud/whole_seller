@@ -7,9 +7,7 @@ import 'models/app_user.dart';
 import 'models/product.dart';
 import 'screens/login_screen.dart';
 import 'screens/products_screen.dart';
-import 'screens/profile_screen.dart';
 import 'screens/sales_list_screen.dart';
-import 'services/demo_store.dart';
 import 'services/providers.dart';
 
 Future<void> main() async {
@@ -26,15 +24,12 @@ class OwnerApp extends ConsumerStatefulWidget {
 
 class _OwnerAppState extends ConsumerState<OwnerApp> {
   bool signedIn = false;
-  bool demoMode = false;
   bool restoringSession = true;
   int page = 0;
   String name = 'Store Owner';
-  String store = 'Bandel Traders';
-  String contact = '98765 43210';
-  String location = 'Bandel, West Bengal';
-  List<Product> products = DemoStore.products;
-  List<Sale> sales = DemoStore.sales;
+  String email = '';
+  List<Product> products = [];
+  List<Sale> sales = [];
   String? productCursor;
   String? salesCursor;
   DateTimeRange? salesRange;
@@ -43,11 +38,20 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
   bool loading = false;
   int _productLoadGeneration = 0;
   int _salesLoadGeneration = 0;
+  final _desktopVerticalController = ScrollController();
+  final _desktopHorizontalController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     unawaited(_restoreSession());
+  }
+
+  @override
+  void dispose() {
+    _desktopVerticalController.dispose();
+    _desktopHorizontalController.dispose();
+    super.dispose();
   }
 
   Future<void> _restoreSession() async {
@@ -67,20 +71,16 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
     setState(() => loading = true);
     try {
       final repository = ref.read(apiRepositoryProvider);
-      final profile = await repository.me();
       final productPage = await repository.products(forceRefresh: true);
       final salePage = await repository.sales();
       if (!mounted) return;
       setState(() {
-        name = profile.name.isEmpty ? user.name : profile.name;
-        store = profile.storeName;
-        contact = profile.contact;
-        location = profile.location;
+        name = user.name.isEmpty ? user.email : user.name;
+        email = user.email;
         products = productPage.items;
         productCursor = productPage.nextCursor;
         sales = salePage.items;
         salesCursor = salePage.nextCursor;
-        demoMode = false;
         signedIn = true;
       });
     } catch (error) {
@@ -94,21 +94,18 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
   }
 
   Future<void> _signOut() async {
-    if (!demoMode) {
-      try {
-        await ref.read(authRepositoryProvider).signOut();
-      } catch (error) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(appErrorMessage(error))));
-        }
+    try {
+      await ref.read(authRepositoryProvider).signOut();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(appErrorMessage(error))));
       }
     }
     if (mounted) {
       setState(() {
         signedIn = false;
-        demoMode = false;
       });
     }
   }
@@ -139,10 +136,18 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
     final generation = ++_salesLoadGeneration;
     final start = range == null
         ? null
-        : DateTime(range.start.year, range.start.month, range.start.day);
+        : DateTime.utc(
+            range.start.year,
+            range.start.month,
+            range.start.day,
+          ).subtract(const Duration(hours: 5, minutes: 30));
     final end = range == null
         ? null
-        : DateTime(range.end.year, range.end.month, range.end.day + 1);
+        : DateTime.utc(
+            range.end.year,
+            range.end.month,
+            range.end.day + 1,
+          ).subtract(const Duration(hours: 5, minutes: 30));
     final loaded = await ref
         .read(apiRepositoryProvider)
         .sales(start: start, end: end, cursor: cursor);
@@ -167,10 +172,6 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
   }
 
   Future<void> _createProduct(Product product) async {
-    if (demoMode) {
-      setState(() => DemoStore.products.insert(0, product));
-      return;
-    }
     await _runRemote(() async {
       await ref.read(apiRepositoryProvider).createProduct(product);
       await _loadProducts(forceRefresh: true);
@@ -178,10 +179,6 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
   }
 
   Future<void> _updateProduct(Product product, String newName) async {
-    if (demoMode) {
-      setState(() => product.name = newName);
-      return;
-    }
     final oldName = product.name;
     product.name = newName;
     await _runRemote(() async {
@@ -196,10 +193,6 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
   }
 
   Future<void> _restockProduct(Product product, int quantity) async {
-    if (demoMode) {
-      setState(() => product.quantity += quantity);
-      return;
-    }
     await _runRemote(() async {
       await ref
           .read(apiRepositoryProvider)
@@ -209,10 +202,6 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
   }
 
   Future<void> _setProductActive(Product product, bool active) async {
-    if (demoMode) {
-      setState(() => product.active = active);
-      return;
-    }
     final oldValue = product.active;
     product.active = active;
     await _runRemote(() async {
@@ -229,26 +218,18 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
   }
 
   Future<void> _setSaleStatus(Sale sale, OrderStatus status) async {
-    if (demoMode) {
-      setState(() => sale.orderStatus = status);
-      return;
-    }
     await _runRemote(() async {
       await ref.read(apiRepositoryProvider).updateSaleStatus(sale, status);
-      await _loadSales(range: salesRange);
+      if (mounted) setState(() => sale.orderStatus = status);
     });
   }
 
-  String get _pageTitle => const [
-    'Owner Workspace',
-    'Sales Entries',
-    'Profile',
-  ][page.clamp(0, 2).toInt()];
+  String get _pageTitle =>
+      const ['Owner Workspace', 'Sales Entries'][page.clamp(0, 1).toInt()];
 
   void _selectPage(int selected) {
-    if (selected < 0 || selected > 2 || selected == page) return;
+    if (selected < 0 || selected > 1 || selected == page) return;
     setState(() => page = selected);
-    if (demoMode) return;
     if (selected == 0) {
       unawaited(_loadProducts(forceRefresh: true));
     } else if (selected == 1) {
@@ -263,7 +244,7 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
       onUpdate: _updateProduct,
       onRestock: _restockProduct,
       onSetActive: _setProductActive,
-      onSearch: demoMode ? null : (query) => _loadProducts(query: query),
+      onSearch: (query) => _loadProducts(query: query),
       onLoadMore: productCursor == null
           ? null
           : () => _loadProducts(
@@ -272,9 +253,9 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
               append: true,
               forceRefresh: false,
             ),
-      onRefresh: demoMode ? null : () => _loadProducts(forceRefresh: true),
+      onRefresh: () => _loadProducts(forceRefresh: true),
     ),
-    1 => SalesListScreen(
+    _ => SalesListScreen(
       sales: sales,
       onStatusChanged: _setSaleStatus,
       initialRange: salesRange,
@@ -289,25 +270,6 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
             ),
       onRefresh: () => _loadSales(range: salesRange),
     ),
-    _ => ProfileScreen(
-      name: name,
-      store: store,
-      contact: contact,
-      location: location,
-      onSaveRemote: !demoMode
-          ? (n, s, c, l) async {
-              await ref
-                  .read(apiRepositoryProvider)
-                  .updateProfile(name: n, store: s, contact: c, location: l);
-            }
-          : null,
-      onSave: (n, s, c, l) => setState(() {
-        name = n;
-        store = s;
-        contact = c;
-        location = l;
-      }),
-    ),
   };
 
   Widget _mobileWorkspace() => Scaffold(
@@ -321,14 +283,12 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
         ),
       ],
     ),
-    body: page == 2
-        ? _pageContent()
-        : SingleChildScrollView(
-            padding: const EdgeInsets.all(12),
-            child: _pageContent(),
-          ),
+    body: SingleChildScrollView(
+      padding: const EdgeInsets.all(12),
+      child: _pageContent(),
+    ),
     bottomNavigationBar: NavigationBar(
-      selectedIndex: page.clamp(0, 2).toInt(),
+      selectedIndex: page.clamp(0, 1).toInt(),
       onDestinationSelected: _selectPage,
       destinations: const [
         NavigationDestination(
@@ -338,10 +298,6 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
         NavigationDestination(
           icon: Icon(Icons.receipt_long_outlined),
           label: 'Sales',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.person_outline),
-          label: 'Profile',
         ),
       ],
     ),
@@ -353,7 +309,7 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
         NavigationRail(
           extended: extended,
           backgroundColor: const Color(0xFF004D46),
-          selectedIndex: page.clamp(0, 2).toInt(),
+          selectedIndex: page.clamp(0, 1).toInt(),
           onDestinationSelected: _selectPage,
           unselectedIconTheme: const IconThemeData(color: Colors.white70),
           selectedIconTheme: const IconThemeData(color: Colors.white),
@@ -362,12 +318,12 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
             color: Colors.white,
             fontWeight: FontWeight.bold,
           ),
-          leading: const Padding(
-            padding: EdgeInsets.symmetric(vertical: 22),
-            child: Icon(
-              Icons.inventory_2_outlined,
-              color: Colors.white,
-              size: 30,
+          leading: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: SizedBox(
+              width: 176,
+              height: 82,
+              child: Image.asset('assets/bonzar_logo.png', fit: BoxFit.contain),
             ),
           ),
           destinations: const [
@@ -379,18 +335,55 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
               icon: Icon(Icons.receipt_long_outlined),
               label: Text('Sales Entries'),
             ),
-            NavigationRailDestination(
-              icon: Icon(Icons.person_outline),
-              label: Text('Profile'),
-            ),
           ],
           trailing: Expanded(
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: IconButton(
-                tooltip: 'Sign out',
-                onPressed: _signOut,
-                icon: const Icon(Icons.logout, color: Colors.white),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  CircleAvatar(
+                    radius: 27,
+                    backgroundColor: Colors.white,
+                    child: ClipOval(
+                      child: Image.asset(
+                        'assets/bonzar_logo.png',
+                        width: 48,
+                        height: 48,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    email,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: 184,
+                    child: FilledButton.icon(
+                      onPressed: _signOut,
+                      icon: const Icon(Icons.logout),
+                      label: const Text('Log out'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF004D46),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -412,19 +405,44 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const Spacer(),
-                    const CircleAvatar(child: Icon(Icons.person_outline)),
                   ],
                 ),
               ),
               const Divider(height: 1),
               Expanded(
-                child: page == 2
-                    ? _pageContent()
-                    : SingleChildScrollView(
-                        padding: const EdgeInsets.all(20),
-                        child: _pageContent(),
+                child: LayoutBuilder(
+                  builder: (context, constraints) => Scrollbar(
+                    controller: _desktopVerticalController,
+                    thumbVisibility: true,
+                    child: SingleChildScrollView(
+                      controller: _desktopVerticalController,
+                      child: Scrollbar(
+                        controller: _desktopHorizontalController,
+                        thumbVisibility: true,
+                        notificationPredicate: (notification) =>
+                            notification.metrics.axis == Axis.horizontal,
+                        child: SingleChildScrollView(
+                          controller: _desktopHorizontalController,
+                          scrollDirection: Axis.horizontal,
+                          child: SizedBox(
+                            width: constraints.maxWidth < 1000
+                                ? 1000
+                                : constraints.maxWidth,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minHeight: constraints.maxHeight,
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: _pageContent(),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -454,21 +472,14 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
     home: restoringSession
         ? const Scaffold(body: Center(child: CircularProgressIndicator()))
         : !signedIn
-        ? LoginScreen(
-            initialError: loginError,
-            onContinue: () => setState(() {
-              demoMode = true;
-              signedIn = true;
-            }),
-            onAuthenticated: _signInWithApi,
-          )
+        ? LoginScreen(initialError: loginError, onAuthenticated: _signInWithApi)
         : loading
         ? const Scaffold(body: Center(child: CircularProgressIndicator()))
         : LayoutBuilder(
             builder: (context, constraints) {
               return constraints.maxWidth < 700
                   ? _mobileWorkspace()
-                  : _desktopWorkspace(extended: constraints.maxWidth >= 1000);
+                  : _desktopWorkspace(extended: true);
             },
           ),
   );

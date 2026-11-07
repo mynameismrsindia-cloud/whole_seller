@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../models/app_user.dart';
 import '../services/providers.dart';
@@ -17,13 +19,58 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
+  static const _savedCredentialsKey = 'seller_remembered_credentials';
+  static const _secureStorage = FlutterSecureStorage();
+
   final formKey = GlobalKey<FormState>();
   final name = TextEditingController();
   final email = TextEditingController();
   final password = TextEditingController();
   bool registering = false;
   bool loading = false;
+  bool passwordVisible = false;
+  bool rememberPassword = false;
   String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_restoreCredentials());
+  }
+
+  Future<void> _restoreCredentials() async {
+    try {
+      final saved = await _secureStorage.read(key: _savedCredentialsKey);
+      if (saved == null) return;
+      final decoded = jsonDecode(saved);
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('Saved credentials are invalid.');
+      }
+      final savedEmail = decoded['email'];
+      final savedPassword = decoded['password'];
+      if (savedEmail is! String || savedPassword is! String) {
+        throw const FormatException('Saved credentials are invalid.');
+      }
+      if (!mounted || email.text.isNotEmpty || password.text.isNotEmpty) {
+        return;
+      }
+      email.text = savedEmail;
+      password.text = savedPassword;
+      setState(() => rememberPassword = true);
+    } catch (exception) {
+      if (mounted) setState(() => error = appErrorMessage(exception));
+    }
+  }
+
+  Future<void> _toggleRememberPassword(bool value) async {
+    setState(() => rememberPassword = value);
+    if (value) return;
+    try {
+      await _secureStorage.delete(key: _savedCredentialsKey);
+    } catch (exception) {
+      if (mounted) setState(() => error = appErrorMessage(exception));
+    }
+  }
 
   @override
   void dispose() {
@@ -52,6 +99,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               password: password.text,
               expectedRole: 'seller',
             );
+      if (!registering) {
+        try {
+          if (rememberPassword) {
+            await _secureStorage.write(
+              key: _savedCredentialsKey,
+              value: jsonEncode({
+                'email': email.text.trim(),
+                'password': password.text,
+              }),
+            );
+          } else {
+            await _secureStorage.delete(key: _savedCredentialsKey);
+          }
+        } catch (exception) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Signed in, but remembered credentials could not be saved: '
+                  '${appErrorMessage(exception)}',
+                ),
+              ),
+            );
+          }
+        }
+      }
       if (mounted) await widget.onAuthenticated?.call(user);
     } catch (exception) {
       if (mounted) setState(() => error = appErrorMessage(exception));
@@ -76,18 +149,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Icon(
-                      Icons.inventory_2_outlined,
-                      color: Color(0xFF00665D),
-                      size: 44,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Wholesale Manager',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 25,
-                        fontWeight: FontWeight.bold,
+                    SizedBox(
+                      height: 180,
+                      child: Image.asset(
+                        'assets/bonzar_logo.png',
+                        fit: BoxFit.contain,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -127,11 +193,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     TextFormField(
                       key: const Key('seller-password'),
                       controller: password,
-                      obscureText: true,
+                      obscureText: !passwordVisible,
                       autofillHints: registering
                           ? const [AutofillHints.newPassword]
                           : const [AutofillHints.password],
-                      decoration: const InputDecoration(labelText: 'Password'),
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        suffixIcon: IconButton(
+                          key: const Key('seller-password-visibility'),
+                          tooltip: passwordVisible
+                              ? 'Hide password'
+                              : 'Show password',
+                          onPressed: () => setState(
+                            () => passwordVisible = !passwordVisible,
+                          ),
+                          icon: Icon(
+                            passwordVisible
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                          ),
+                        ),
+                      ),
                       validator: (value) =>
                           (value?.length ?? 0) < (registering ? 12 : 1)
                           ? registering
@@ -140,6 +222,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           : null,
                     ),
                     const SizedBox(height: 16),
+                    if (!registering)
+                      CheckboxListTile(
+                        key: const Key('seller-remember-password'),
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: const Text('Remember password'),
+                        value: rememberPassword,
+                        onChanged: loading
+                            ? null
+                            : (value) =>
+                                  _toggleRememberPassword(value ?? false),
+                      ),
                     SizedBox(
                       height: 50,
                       child: FilledButton(

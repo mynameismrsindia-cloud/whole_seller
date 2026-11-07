@@ -36,9 +36,14 @@ self-contained GitHub repository root for `whole_seller_backend`.
 The database connection string stays on the server. Never place `DATABASE_URL`
 in the Flutter app or public GitHub variables.
 
-## Provision the first Owner
+## Owner registration and optional provisioning
 
-After first deployment and migrations, use Railway's service shell to provide
+Owners may register directly in the Owner desktop app with name, email, and
+password, just like Sellers. The Owner app uses a separate API endpoint that
+assigns the Owner role; the Seller endpoint always assigns the Seller role.
+
+Administrators may also provision accounts from Railway's service shell by
+providing
 `OWNER_EMAIL`, `OWNER_NAME`, and `OWNER_PASSWORD` as temporary variables, then
 run:
 
@@ -46,9 +51,8 @@ run:
 node dist/scripts/create-owner.js
 ```
 
-Use an administrator-controlled password of at least 14 characters. The
-password is Argon2id-hashed. Remove the temporary variables afterward. Public
-registration creates Sellers only.
+Use a password of at least 14 characters. The password is Argon2id-hashed.
+Remove the temporary variables afterward.
 
 ## Local development
 

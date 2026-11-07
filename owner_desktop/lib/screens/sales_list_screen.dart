@@ -35,17 +35,23 @@ class _SalesListScreenState extends State<SalesListScreen> {
     final visible = widget.sales.where((sale) {
       final selected = selectedRange;
       if (selected == null) return true;
-      final start = DateTime(
+      final indiaTime = _indiaTime(sale.createdAt);
+      final saleDate = DateTime.utc(
+        indiaTime.year,
+        indiaTime.month,
+        indiaTime.day,
+      );
+      final start = DateTime.utc(
         selected.start.year,
         selected.start.month,
         selected.start.day,
       );
-      final end = DateTime(
+      final end = DateTime.utc(
         selected.end.year,
         selected.end.month,
         selected.end.day + 1,
       );
-      return !sale.createdAt.isBefore(start) && sale.createdAt.isBefore(end);
+      return !saleDate.isBefore(start) && saleDate.isBefore(end);
     }).toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
     return Card(
@@ -126,7 +132,6 @@ class _SalesListScreenState extends State<SalesListScreen> {
                   columns: const [
                     DataColumn(label: Text('Date & time')),
                     DataColumn(label: Text('Salesman')),
-                    DataColumn(label: Text('User ID')),
                     DataColumn(label: Text('Store')),
                     DataColumn(label: Text('Contact')),
                     DataColumn(label: Text('Location')),
@@ -145,7 +150,6 @@ class _SalesListScreenState extends State<SalesListScreen> {
                           ),
                         ),
                         DataCell(Text(sale.salesman)),
-                        DataCell(Text(sale.userId)),
                         DataCell(Text(sale.store)),
                         DataCell(Text(sale.contact)),
                         DataCell(Text(sale.location)),
@@ -159,22 +163,26 @@ class _SalesListScreenState extends State<SalesListScreen> {
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
-                                sale.orderStatus == OrderStatus.pending
-                                    ? 'Pending'
-                                    : 'Approved',
-                                style: TextStyle(
+                              Chip(
+                                label: Text(
+                                  sale.orderStatus == OrderStatus.pending
+                                      ? 'Pending'
+                                      : 'Approved',
+                                ),
+                                backgroundColor:
+                                    sale.orderStatus == OrderStatus.pending
+                                    ? Colors.orange.shade100
+                                    : Colors.green.shade100,
+                                labelStyle: TextStyle(
                                   color: sale.orderStatus == OrderStatus.pending
-                                      ? Colors.orange.shade800
-                                      : Colors.green.shade800,
+                                      ? Colors.orange.shade900
+                                      : Colors.green.shade900,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                               const SizedBox(width: 8),
                               FilledButton(
-                                key: ValueKey(
-                                  'approve-order-${sale.id.isEmpty ? sale.userId : sale.id}',
-                                ),
+                                key: ValueKey('approve-order-${sale.id}'),
                                 onPressed:
                                     sale.orderStatus == OrderStatus.pending
                                     ? () => widget.onStatusChanged(
@@ -221,14 +229,21 @@ class _SalesListScreenState extends State<SalesListScreen> {
   }
 }
 
-String _date(DateTime value) =>
-    '${value.day.toString().padLeft(2, '0')} ${_month(value.month)} ${value.year}';
+String _date(DateTime value) {
+  final indiaTime = _indiaTime(value);
+  return '${indiaTime.day.toString().padLeft(2, '0')} '
+      '${_month(indiaTime.month)} ${indiaTime.year}';
+}
 
 String _time(DateTime value) {
-  final hour = value.hour % 12 == 0 ? 12 : value.hour % 12;
-  return '$hour:${value.minute.toString().padLeft(2, '0')} '
-      '${value.hour >= 12 ? 'PM' : 'AM'}';
+  final indiaTime = _indiaTime(value);
+  final hour = indiaTime.hour % 12 == 0 ? 12 : indiaTime.hour % 12;
+  return '$hour:${indiaTime.minute.toString().padLeft(2, '0')} '
+      '${indiaTime.hour >= 12 ? 'PM' : 'AM'}';
 }
+
+DateTime _indiaTime(DateTime value) =>
+    value.toUtc().add(const Duration(hours: 5, minutes: 30));
 
 String _month(int n) => const [
   'Jan',

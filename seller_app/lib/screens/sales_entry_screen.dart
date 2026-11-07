@@ -192,7 +192,9 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc().add(
+      const Duration(hours: 5, minutes: 30),
+    );
     final salesmanName = widget.name.trim().isEmpty
         ? 'Salesman'
         : widget.name.trim();

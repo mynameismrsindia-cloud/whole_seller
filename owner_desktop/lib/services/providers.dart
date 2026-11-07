@@ -39,6 +39,23 @@ class AuthRepository {
 
   final WholesaleApiClient api;
 
+  Future<AppUser> registerOwner({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    final user = await api.registerOwner(
+      name: name,
+      email: email,
+      password: password,
+    );
+    if (user['role'] != 'owner') {
+      await api.logout();
+      throw StateError('Owner registration did not return Owner access.');
+    }
+    return AppUser.fromJson(user);
+  }
+
   Future<AppUser> signIn({
     required String email,
     required String password,
@@ -73,22 +90,6 @@ class ApiRepository {
   ApiRepository(this.api);
 
   final WholesaleApiClient api;
-
-  Future<AppUser> me() async => AppUser.fromJson(await api.profile());
-
-  Future<AppUser> updateProfile({
-    required String name,
-    required String store,
-    required String contact,
-    required String location,
-  }) async => AppUser.fromJson(
-    await api.updateProfile(
-      name: name,
-      storeName: store,
-      contact: contact,
-      location: location,
-    ),
-  );
 
   Future<ProductPage> products({
     String query = '',

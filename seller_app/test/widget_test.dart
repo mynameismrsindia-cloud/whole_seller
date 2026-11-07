@@ -15,6 +15,16 @@ void main() {
 
     expect(find.text('Seller sign in'), findsOneWidget);
     expect(find.text('Open demo workspace'), findsNothing);
+    expect(find.text('Remember password'), findsOneWidget);
+    final passwordField = find.byKey(const Key('seller-password'));
+    final editablePassword = find.descendant(
+      of: passwordField,
+      matching: find.byType(EditableText),
+    );
+    expect(tester.widget<EditableText>(editablePassword).obscureText, isTrue);
+    await tester.tap(find.byKey(const Key('seller-password-visibility')));
+    await tester.pump();
+    expect(tester.widget<EditableText>(editablePassword).obscureText, isFalse);
   });
 
   testWidgets('sales entry has a product dropdown and no search', (

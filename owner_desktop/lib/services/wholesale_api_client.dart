@@ -86,6 +86,21 @@ class WholesaleApiClient {
     return currentUser!;
   }
 
+  Future<Map<String, dynamic>> registerOwner({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    final response = await _request(
+      'POST',
+      '/auth/register-owner',
+      body: {'name': name, 'email': email, 'password': password},
+      authenticated: false,
+    );
+    await _saveSession(response);
+    return currentUser!;
+  }
+
   Future<Map<String, dynamic>> login({
     required String email,
     required String password,
@@ -128,24 +143,6 @@ class WholesaleApiClient {
       await _clearSession();
     }
   }
-
-  Future<Map<String, dynamic>> profile() async => _request('GET', '/auth/me');
-
-  Future<Map<String, dynamic>> updateProfile({
-    required String name,
-    required String storeName,
-    required String contact,
-    required String location,
-  }) async => _request(
-    'PATCH',
-    '/auth/me',
-    body: {
-      'name': name,
-      'storeName': storeName,
-      'contact': contact,
-      'location': location,
-    },
-  );
 
   Future<ApiPage> products({
     String query = '',

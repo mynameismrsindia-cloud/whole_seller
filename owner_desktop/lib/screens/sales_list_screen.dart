@@ -7,6 +7,7 @@ class SalesListScreen extends StatefulWidget {
     super.key,
     required this.sales,
     required this.onStatusChanged,
+    required this.onDownloadInvoice,
     this.initialRange,
     this.hasMore = false,
     this.onRangeChanged,
@@ -16,6 +17,7 @@ class SalesListScreen extends StatefulWidget {
 
   final List<Sale> sales;
   final void Function(Sale, OrderStatus) onStatusChanged;
+  final Future<void> Function(Sale) onDownloadInvoice;
   final DateTimeRange? initialRange;
   final bool hasMore;
   final Future<void> Function(DateTimeRange?)? onRangeChanged;
@@ -130,6 +132,7 @@ class _SalesListScreenState extends State<SalesListScreen> {
                 scrollDirection: Axis.horizontal,
                 child: DataTable(
                   columns: const [
+                    DataColumn(label: Text('Action')),
                     DataColumn(label: Text('Date & time')),
                     DataColumn(label: Text('Salesman')),
                     DataColumn(label: Text('Store')),
@@ -138,49 +141,15 @@ class _SalesListScreenState extends State<SalesListScreen> {
                     DataColumn(label: Text('Product')),
                     DataColumn(label: Text('Qty')),
                     DataColumn(label: Text('Rate')),
-                    DataColumn(label: Text('Total')),
                     DataColumn(label: Text('Order status')),
                   ],
                   rows: visible.map((sale) {
                     return DataRow(
                       cells: [
                         DataCell(
-                          Text(
-                            '${_date(sale.createdAt)}\n${_time(sale.createdAt)}',
-                          ),
-                        ),
-                        DataCell(Text(sale.salesman)),
-                        DataCell(Text(sale.store)),
-                        DataCell(Text(sale.contact)),
-                        DataCell(Text(sale.location)),
-                        DataCell(
-                          Text('${sale.productName}\n${sale.productId}'),
-                        ),
-                        DataCell(Text('${sale.quantity}')),
-                        DataCell(Text('₹${sale.rate}')),
-                        DataCell(Text('₹${sale.totalAmount}')),
-                        DataCell(
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Chip(
-                                label: Text(
-                                  sale.orderStatus == OrderStatus.pending
-                                      ? 'Pending'
-                                      : 'Approved',
-                                ),
-                                backgroundColor:
-                                    sale.orderStatus == OrderStatus.pending
-                                    ? Colors.orange.shade100
-                                    : Colors.green.shade100,
-                                labelStyle: TextStyle(
-                                  color: sale.orderStatus == OrderStatus.pending
-                                      ? Colors.orange.shade900
-                                      : Colors.green.shade900,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
                               FilledButton(
                                 key: ValueKey('approve-order-${sale.id}'),
                                 onPressed:
@@ -196,7 +165,47 @@ class _SalesListScreenState extends State<SalesListScreen> {
                                       : 'Approved',
                                 ),
                               ),
+                              IconButton(
+                                key: ValueKey('download-invoice-${sale.id}'),
+                                tooltip: 'Download invoice PDF',
+                                onPressed: () =>
+                                    widget.onDownloadInvoice(sale),
+                                icon: const Icon(Icons.picture_as_pdf_outlined),
+                              ),
                             ],
+                          ),
+                        ),
+                        DataCell(
+                          Text(
+                            '${_date(sale.createdAt)}\n${_time(sale.createdAt)}',
+                          ),
+                        ),
+                        DataCell(Text(sale.salesman)),
+                        DataCell(Text(sale.store)),
+                        DataCell(Text(sale.contact)),
+                        DataCell(Text(sale.location)),
+                        DataCell(
+                          Text('${sale.productName}\n${sale.productId}'),
+                        ),
+                        DataCell(Text('${sale.quantity}')),
+                        DataCell(Text('₹${sale.rate}')),
+                        DataCell(
+                          Chip(
+                            label: Text(
+                              sale.orderStatus == OrderStatus.pending
+                                  ? 'Pending'
+                                  : 'Approved',
+                            ),
+                            backgroundColor:
+                                sale.orderStatus == OrderStatus.pending
+                                ? Colors.orange.shade100
+                                : Colors.green.shade100,
+                            labelStyle: TextStyle(
+                              color: sale.orderStatus == OrderStatus.pending
+                                  ? Colors.orange.shade900
+                                  : Colors.green.shade900,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],

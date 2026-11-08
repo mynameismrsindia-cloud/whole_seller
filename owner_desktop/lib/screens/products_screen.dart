@@ -66,18 +66,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
   }
 
   Future<void> _add(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
     final product = await Navigator.of(context).push<Product>(
       MaterialPageRoute<Product>(builder: (_) => const AddProductScreen()),
     );
-    if (!messenger.mounted) return;
     if (product == null) return;
-    if (widget.products.any((existing) => existing.id == product.id)) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Product ID already exists.')),
-      );
-      return;
-    }
     widget.onAdd(product);
   }
 

@@ -109,7 +109,6 @@ class ApiRepository {
 
   Future<void> createProduct(Product product) async {
     await api.createProduct({
-      'id': product.id,
       'name': product.name,
       'quantity': product.quantity,
       'active': product.active,

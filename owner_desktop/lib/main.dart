@@ -9,6 +9,7 @@ import 'screens/login_screen.dart';
 import 'screens/products_screen.dart';
 import 'screens/sales_list_screen.dart';
 import 'services/providers.dart';
+import 'services/sale_invoice_pdf.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -224,6 +225,23 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
     });
   }
 
+  Future<void> _downloadSaleInvoice(Sale sale) async {
+    try {
+      await saveSaleInvoicePdf(sale);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invoice PDF downloaded.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not download invoice PDF: $error')),
+        );
+      }
+    }
+  }
+
   String get _pageTitle =>
       const ['Owner Workspace', 'Sales Entries'][page.clamp(0, 1).toInt()];
 
@@ -258,6 +276,7 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
     _ => SalesListScreen(
       sales: sales,
       onStatusChanged: _setSaleStatus,
+      onDownloadInvoice: _downloadSaleInvoice,
       initialRange: salesRange,
       hasMore: salesCursor != null,
       onRangeChanged: (range) => _loadSales(range: range),

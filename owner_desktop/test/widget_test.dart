@@ -139,6 +139,7 @@ void main() {
 
     await tester.pumpWidget(const MaterialApp(home: AddProductScreen()));
     expect(tester.takeException(), isNull);
+    expect(find.byKey(const Key('owner-product-id')), findsNothing);
     await tester.ensureVisible(find.text('Save Product'));
     await tester.pumpAndSettle();
     expect(
@@ -165,6 +166,7 @@ void main() {
       createdAt: DateTime.utc(2026, 1, 1, 21),
     );
     OrderStatus? changedStatus;
+    var invoiceRequested = false;
     await tester.pumpWidget(
       MaterialApp(
         home: StatefulBuilder(
@@ -179,6 +181,9 @@ void main() {
                 setState(() => sale.orderStatus = status);
                 changedStatus = status;
               },
+              onDownloadInvoice: (_) async {
+                invoiceRequested = true;
+              },
             ),
           ),
         ),
@@ -189,11 +194,12 @@ void main() {
     expect(find.text('User ID'), findsNothing);
     expect(find.text('private-user-id'), findsNothing);
     expect(find.text('Pending'), findsOneWidget);
-    await tester.drag(
-      find.byType(SingleChildScrollView),
-      const Offset(-1200, 0),
-    );
-    await tester.pumpAndSettle();
+    final approveButton = find.byKey(const ValueKey('approve-order-sale-1'));
+    expect(tester.getRect(approveButton).right, lessThanOrEqualTo(800));
+    expect(find.byTooltip('Download invoice PDF'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('download-invoice-sale-1')));
+    await tester.pump();
+    expect(invoiceRequested, isTrue);
     await tester.tap(find.byKey(const ValueKey('approve-order-sale-1')));
     await tester.pump();
     expect(changedStatus, OrderStatus.approved);

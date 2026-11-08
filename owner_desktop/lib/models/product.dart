@@ -1,6 +1,6 @@
 class Product {
   Product({
-    required this.id,
+    this.id = '',
     required this.name,
     required this.quantity,
     this.active = true,

@@ -12,14 +12,12 @@ class AddProductScreen extends StatefulWidget {
 
 class _AddProductScreenState extends State<AddProductScreen> {
   final key = GlobalKey<FormState>();
-  final id = TextEditingController();
   final name = TextEditingController();
   final quantity = TextEditingController();
   bool active = true;
 
   @override
   void dispose() {
-    id.dispose();
     name.dispose();
     quantity.dispose();
     super.dispose();
@@ -47,22 +45,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    LabeledField(
-                      label: 'Product ID',
-                      child: TextFormField(
-                        key: const Key('owner-product-id'),
-                        controller: id,
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Required';
-                          }
-                          if (value.contains('/')) {
-                            return 'Slash is not allowed';
-                          }
-                          return null;
-                        },
-                      ),
-                    ),
                     LabeledField(
                       label: 'Product name',
                       child: TextFormField(
@@ -94,17 +76,13 @@ class _AddProductScreenState extends State<AddProductScreen> {
                         final parsedQuantity = int.tryParse(
                           quantity.text.trim(),
                         );
-                        final productId = id.text.trim();
                         final productName = name.text.trim();
-                        if (parsedQuantity == null ||
-                            productId.isEmpty ||
-                            productName.isEmpty) {
+                        if (parsedQuantity == null || productName.isEmpty) {
                           return;
                         }
                         Navigator.pop(
                           context,
                           Product(
-                            id: productId,
                             name: productName,
                             quantity: parsedQuantity,
                             active: active,

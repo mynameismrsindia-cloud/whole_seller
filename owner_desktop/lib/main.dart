@@ -40,7 +40,6 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
   int _productLoadGeneration = 0;
   int _salesLoadGeneration = 0;
   final _desktopVerticalController = ScrollController();
-  final _desktopHorizontalController = ScrollController();
 
   @override
   void initState() {
@@ -51,7 +50,6 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
   @override
   void dispose() {
     _desktopVerticalController.dispose();
-    _desktopHorizontalController.dispose();
     super.dispose();
   }
 
@@ -435,27 +433,15 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
                     thumbVisibility: true,
                     child: SingleChildScrollView(
                       controller: _desktopVerticalController,
-                      child: Scrollbar(
-                        controller: _desktopHorizontalController,
-                        thumbVisibility: true,
-                        notificationPredicate: (notification) =>
-                            notification.metrics.axis == Axis.horizontal,
-                        child: SingleChildScrollView(
-                          controller: _desktopHorizontalController,
-                          scrollDirection: Axis.horizontal,
-                          child: SizedBox(
-                            width: constraints.maxWidth < 1000
-                                ? 1000
-                                : constraints.maxWidth,
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(
-                                minHeight: constraints.maxHeight,
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(20),
-                                child: _pageContent(),
-                              ),
-                            ),
+                      child: SizedBox(
+                        width: constraints.maxWidth,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: constraints.maxHeight,
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: _pageContent(),
                           ),
                         ),
                       ),

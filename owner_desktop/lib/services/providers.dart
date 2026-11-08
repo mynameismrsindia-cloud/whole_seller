@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/app_user.dart';
@@ -108,11 +110,27 @@ class ApiRepository {
   }
 
   Future<void> createProduct(Product product) async {
-    await api.createProduct({
-      'name': product.name,
-      'quantity': product.quantity,
-      'active': product.active,
-    });
+    final random = Random.secure();
+    for (var attempt = 0; attempt < 5; attempt++) {
+      final id = List.generate(
+        3,
+        (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+      ).join().toUpperCase();
+      try {
+        await api.createProduct({
+          'id': id,
+          'name': product.name,
+          'quantity': product.quantity,
+          'active': product.active,
+        });
+        return;
+      } on ApiException catch (error) {
+        final isIdCollision =
+            error.statusCode == 409 &&
+            error.message.contains('Product ID already exists');
+        if (!isIdCollision || attempt == 4) rethrow;
+      }
+    }
   }
 
   Future<void> updateProduct(Product product, String name) =>

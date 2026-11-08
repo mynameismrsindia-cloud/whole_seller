@@ -7,11 +7,29 @@ import 'package:owner_desktop/models/app_user.dart';
 import 'package:owner_desktop/models/product.dart';
 import 'package:owner_desktop/screens/add_product_screen.dart';
 import 'package:owner_desktop/screens/login_screen.dart';
+import 'package:owner_desktop/screens/products_screen.dart';
 import 'package:owner_desktop/screens/sales_list_screen.dart';
 import 'package:owner_desktop/services/providers.dart';
 import 'package:owner_desktop/services/wholesale_api_client.dart';
 
 void main() {
+  test(
+    'product creation sends a generated hex ID and retries collisions',
+    () async {
+      final api = _RecordingProductApiClient()..conflictsRemaining = 1;
+      addTearDown(api.close);
+      final repository = ApiRepository(api);
+
+      await repository.createProduct(
+        Product(name: 'Test product', quantity: 3),
+      );
+
+      expect(api.attemptedIds, hasLength(2));
+      expect(api.attemptedIds, everyElement(matches(RegExp(r'^[0-9A-F]{6}$'))));
+      expect(api.attemptedIds[0], isNot(api.attemptedIds[1]));
+    },
+  );
+
   testWidgets('owner login has no demo bypass and exposes password options', (
     tester,
   ) async {
@@ -149,6 +167,34 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('product list hides IDs with name first and actions last', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ProductsScreen(
+            products: [Product(id: 'ABC123', name: 'Rice', quantity: 5)],
+            onAdd: (_) {},
+            onUpdate: (_, _) {},
+            onRestock: (_, _) {},
+            onSetActive: (_, _) {},
+          ),
+        ),
+      ),
+    );
+
+    final columns = tester.widget<DataTable>(find.byType(DataTable)).columns;
+    expect(columns.map((column) => (column.label as Text).data), [
+      'Product name',
+      'Remaining',
+      'Status',
+      'Actions',
+    ]);
+    expect(find.text('ABC123'), findsNothing);
+    expect(find.text('Rice'), findsOneWidget);
+  });
+
   testWidgets('sales list shows Indian time and status without user ID', (
     tester,
   ) async {
@@ -194,9 +240,29 @@ void main() {
     expect(find.text('User ID'), findsNothing);
     expect(find.text('private-user-id'), findsNothing);
     expect(find.text('Pending'), findsOneWidget);
+    final columns = tester.widget<DataTable>(find.byType(DataTable)).columns;
+    expect(columns.map((column) => (column.label as Text).data), [
+      'Date & time',
+      'Salesman',
+      'Store',
+      'Contact',
+      'Location',
+      'Product',
+      'Qty',
+      'Rate',
+      'Order status',
+      'Action',
+    ]);
+    expect(find.text('Total'), findsNothing);
+    final tableScrollbar = tester.widget<Scrollbar>(find.byType(Scrollbar));
+    expect(tableScrollbar.thumbVisibility, isTrue);
+    expect(tableScrollbar.trackVisibility, isTrue);
+    expect(tableScrollbar.interactive, isTrue);
+    expect(tableScrollbar.controller!.position.maxScrollExtent, greaterThan(0));
     final approveButton = find.byKey(const ValueKey('approve-order-sale-1'));
-    expect(tester.getRect(approveButton).right, lessThanOrEqualTo(800));
     expect(find.byTooltip('Download invoice PDF'), findsOneWidget);
+    await tester.ensureVisible(approveButton);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('download-invoice-sale-1')));
     await tester.pump();
     expect(invoiceRequested, isTrue);
@@ -249,4 +315,18 @@ class _TestApiRepository extends ApiRepository {
     DateTime? end,
     String? cursor,
   }) async => const SalePage([], null);
+}
+
+class _RecordingProductApiClient extends WholesaleApiClient {
+  int conflictsRemaining = 0;
+  final attemptedIds = <String>[];
+
+  @override
+  Future<void> createProduct(Map<String, Object?> product) async {
+    attemptedIds.add(product['id']! as String);
+    if (conflictsRemaining > 0) {
+      conflictsRemaining--;
+      throw const ApiException(409, 'Product ID already exists.');
+    }
+  }
 }

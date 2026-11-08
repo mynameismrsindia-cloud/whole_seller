@@ -33,6 +33,7 @@ class ProductsScreen extends StatefulWidget {
 
 class _ProductsScreenState extends State<ProductsScreen> {
   final search = TextEditingController();
+  final _tableScrollController = ScrollController();
   Timer? debounce;
   bool searching = false;
   int searchGeneration = 0;
@@ -41,6 +42,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
   void dispose() {
     debounce?.cancel();
     search.dispose();
+    _tableScrollController.dispose();
     super.dispose();
   }
 
@@ -197,71 +199,77 @@ class _ProductsScreenState extends State<ProductsScreen> {
               ),
             )
           else
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                columns: const [
-                  DataColumn(label: Text('Product ID')),
-                  DataColumn(label: Text('Product name')),
-                  DataColumn(label: Text('Remaining')),
-                  DataColumn(label: Text('Status')),
-                  DataColumn(label: Text('Actions')),
-                ],
-                rows: widget.products.map((product) {
-                  return DataRow(
-                    cells: [
-                      DataCell(Text(product.id)),
-                      DataCell(Text(product.name)),
-                      DataCell(
-                        Text(
-                          '${product.quantity}',
-                          style: TextStyle(
-                            color: product.quantity == 0 ? Colors.red : null,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      DataCell(
-                        Text(
-                          product.quantity == 0
-                              ? 'Out of stock'
-                              : product.active
-                              ? 'Active'
-                              : 'Inactive',
-                          style: TextStyle(
-                            color: product.active && product.quantity > 0
-                                ? Colors.green.shade800
-                                : Colors.red.shade700,
-                          ),
-                        ),
-                      ),
-                      DataCell(
-                        Row(
-                          children: [
-                            IconButton(
-                              tooltip: 'Edit product',
-                              onPressed: () => _edit(context, product),
-                              icon: const Icon(Icons.edit_outlined),
+            Scrollbar(
+              controller: _tableScrollController,
+              thumbVisibility: true,
+              trackVisibility: true,
+              thickness: 12,
+              interactive: true,
+              child: SingleChildScrollView(
+                controller: _tableScrollController,
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  columns: const [
+                    DataColumn(label: Text('Product name')),
+                    DataColumn(label: Text('Remaining')),
+                    DataColumn(label: Text('Status')),
+                    DataColumn(label: Text('Actions')),
+                  ],
+                  rows: widget.products.map((product) {
+                    return DataRow(
+                      cells: [
+                        DataCell(Text(product.name)),
+                        DataCell(
+                          Text(
+                            '${product.quantity}',
+                            style: TextStyle(
+                              color: product.quantity == 0 ? Colors.red : null,
+                              fontWeight: FontWeight.w600,
                             ),
-                            IconButton(
-                              tooltip: 'Restock',
-                              onPressed: () => _adjustStock(context, product),
-                              icon: const Icon(
-                                Icons.add_box_outlined,
-                                color: Color(0xFF00665D),
+                          ),
+                        ),
+                        DataCell(
+                          Text(
+                            product.quantity == 0
+                                ? 'Out of stock'
+                                : product.active
+                                ? 'Active'
+                                : 'Inactive',
+                            style: TextStyle(
+                              color: product.active && product.quantity > 0
+                                  ? Colors.green.shade800
+                                  : Colors.red.shade700,
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Row(
+                            children: [
+                              IconButton(
+                                tooltip: 'Edit product',
+                                onPressed: () => _edit(context, product),
+                                icon: const Icon(Icons.edit_outlined),
                               ),
-                            ),
-                            Switch.adaptive(
-                              value: product.active,
-                              onChanged: (value) =>
-                                  widget.onSetActive(product, value),
-                            ),
-                          ],
+                              IconButton(
+                                tooltip: 'Restock',
+                                onPressed: () => _adjustStock(context, product),
+                                icon: const Icon(
+                                  Icons.add_box_outlined,
+                                  color: Color(0xFF00665D),
+                                ),
+                              ),
+                              Switch.adaptive(
+                                value: product.active,
+                                onChanged: (value) =>
+                                    widget.onSetActive(product, value),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  );
-                }).toList(),
+                      ],
+                    );
+                  }).toList(),
+                ),
               ),
             ),
           if (widget.onLoadMore != null)

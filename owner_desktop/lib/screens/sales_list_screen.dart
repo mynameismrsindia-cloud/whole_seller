@@ -30,6 +30,13 @@ class SalesListScreen extends StatefulWidget {
 
 class _SalesListScreenState extends State<SalesListScreen> {
   late DateTimeRange? range = widget.initialRange;
+  final _tableScrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _tableScrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -128,89 +135,99 @@ class _SalesListScreenState extends State<SalesListScreen> {
                 ),
               )
             else
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  columns: const [
-                    DataColumn(label: Text('Action')),
-                    DataColumn(label: Text('Date & time')),
-                    DataColumn(label: Text('Salesman')),
-                    DataColumn(label: Text('Store')),
-                    DataColumn(label: Text('Contact')),
-                    DataColumn(label: Text('Location')),
-                    DataColumn(label: Text('Product')),
-                    DataColumn(label: Text('Qty')),
-                    DataColumn(label: Text('Rate')),
-                    DataColumn(label: Text('Order status')),
-                  ],
-                  rows: visible.map((sale) {
-                    return DataRow(
-                      cells: [
-                        DataCell(
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              FilledButton(
-                                key: ValueKey('approve-order-${sale.id}'),
-                                onPressed:
-                                    sale.orderStatus == OrderStatus.pending
-                                    ? () => widget.onStatusChanged(
-                                        sale,
-                                        OrderStatus.approved,
-                                      )
-                                    : null,
-                                child: Text(
-                                  sale.orderStatus == OrderStatus.pending
-                                      ? 'Approve'
-                                      : 'Approved',
-                                ),
-                              ),
-                              IconButton(
-                                key: ValueKey('download-invoice-${sale.id}'),
-                                tooltip: 'Download invoice PDF',
-                                onPressed: () =>
-                                    widget.onDownloadInvoice(sale),
-                                icon: const Icon(Icons.picture_as_pdf_outlined),
-                              ),
-                            ],
-                          ),
-                        ),
-                        DataCell(
-                          Text(
-                            '${_date(sale.createdAt)}\n${_time(sale.createdAt)}',
-                          ),
-                        ),
-                        DataCell(Text(sale.salesman)),
-                        DataCell(Text(sale.store)),
-                        DataCell(Text(sale.contact)),
-                        DataCell(Text(sale.location)),
-                        DataCell(
-                          Text('${sale.productName}\n${sale.productId}'),
-                        ),
-                        DataCell(Text('${sale.quantity}')),
-                        DataCell(Text('₹${sale.rate}')),
-                        DataCell(
-                          Chip(
-                            label: Text(
-                              sale.orderStatus == OrderStatus.pending
-                                  ? 'Pending'
-                                  : 'Approved',
+              Scrollbar(
+                controller: _tableScrollController,
+                thumbVisibility: true,
+                trackVisibility: true,
+                thickness: 12,
+                interactive: true,
+                child: SingleChildScrollView(
+                  controller: _tableScrollController,
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    columns: const [
+                      DataColumn(label: Text('Date & time')),
+                      DataColumn(label: Text('Salesman')),
+                      DataColumn(label: Text('Store')),
+                      DataColumn(label: Text('Contact')),
+                      DataColumn(label: Text('Location')),
+                      DataColumn(label: Text('Product')),
+                      DataColumn(label: Text('Qty')),
+                      DataColumn(label: Text('Rate')),
+                      DataColumn(label: Text('Order status')),
+                      DataColumn(label: Text('Action')),
+                    ],
+                    rows: visible.map((sale) {
+                      return DataRow(
+                        cells: [
+                          DataCell(
+                            Text(
+                              '${_date(sale.createdAt)}\n${_time(sale.createdAt)}',
                             ),
-                            backgroundColor:
+                          ),
+                          DataCell(Text(sale.salesman)),
+                          DataCell(Text(sale.store)),
+                          DataCell(Text(sale.contact)),
+                          DataCell(Text(sale.location)),
+                          DataCell(
+                            Text('${sale.productName}\n${sale.productId}'),
+                          ),
+                          DataCell(Text('${sale.quantity}')),
+                          DataCell(Text('₹${sale.rate}')),
+                          DataCell(
+                            Chip(
+                              label: Text(
                                 sale.orderStatus == OrderStatus.pending
-                                ? Colors.orange.shade100
-                                : Colors.green.shade100,
-                            labelStyle: TextStyle(
-                              color: sale.orderStatus == OrderStatus.pending
-                                  ? Colors.orange.shade900
-                                  : Colors.green.shade900,
-                              fontWeight: FontWeight.w600,
+                                    ? 'Pending'
+                                    : 'Approved',
+                              ),
+                              backgroundColor:
+                                  sale.orderStatus == OrderStatus.pending
+                                  ? Colors.orange.shade100
+                                  : Colors.green.shade100,
+                              labelStyle: TextStyle(
+                                color: sale.orderStatus == OrderStatus.pending
+                                    ? Colors.orange.shade900
+                                    : Colors.green.shade900,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    );
-                  }).toList(),
+                          DataCell(
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                FilledButton(
+                                  key: ValueKey('approve-order-${sale.id}'),
+                                  onPressed:
+                                      sale.orderStatus == OrderStatus.pending
+                                      ? () => widget.onStatusChanged(
+                                          sale,
+                                          OrderStatus.approved,
+                                        )
+                                      : null,
+                                  child: Text(
+                                    sale.orderStatus == OrderStatus.pending
+                                        ? 'Approve'
+                                        : 'Approved',
+                                  ),
+                                ),
+                                IconButton(
+                                  key: ValueKey('download-invoice-${sale.id}'),
+                                  tooltip: 'Download invoice PDF',
+                                  onPressed: () =>
+                                      widget.onDownloadInvoice(sale),
+                                  icon: const Icon(
+                                    Icons.picture_as_pdf_outlined,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  ),
                 ),
               ),
             if (widget.hasMore && widget.onLoadMore != null)

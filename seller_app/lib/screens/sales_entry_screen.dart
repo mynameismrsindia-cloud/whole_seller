@@ -18,6 +18,7 @@ class SalesEntryScreen extends StatefulWidget {
     this.onLoadMoreProducts,
     this.onRefreshProducts,
     required this.onSubmitSale,
+    this.onSubmitOrder,
   });
 
   final String name;
@@ -39,6 +40,14 @@ class SalesEntryScreen extends StatefulWidget {
     required String location,
   })
   onSubmitSale;
+  final Future<List<Product>> Function({
+    required String requestId,
+    required List<Map<String, Object>> items,
+    required String store,
+    required String contact,
+    required String location,
+  })?
+  onSubmitOrder;
 
   @override
   State<SalesEntryScreen> createState() => _SalesEntryScreenState();
@@ -49,12 +58,12 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
   late final store = TextEditingController(text: widget.store);
   late final contact = TextEditingController(text: widget.contact);
   late final location = TextEditingController(text: widget.location);
-  final quantity = TextEditingController();
-  final rate = TextEditingController();
-  Product? selected;
   late List<Product> _products = widget.products;
+  final List<_SaleLine> _lines = [];
+  int _nextLineId = 0;
   String requestId = const Uuid().v4();
   String? _requestFingerprint;
+  bool _showProductValidation = false;
   bool submitting = false;
   bool loadingMoreProducts = false;
 
@@ -64,12 +73,7 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
     store.addListener(_onFormChanged);
     contact.addListener(_onFormChanged);
     location.addListener(_onFormChanged);
-    quantity.addListener(_onFormChanged);
-    rate.addListener(_onFormChanged);
-    selected = _availableProducts
-        .where((p) => p.active && p.quantity > 0)
-        .firstOrNull;
-    rate.text = selected?.rate.toString() ?? '';
+    _lines.add(_createLine());
   }
 
   @override
@@ -77,30 +81,47 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.products != widget.products) {
       _products = widget.products;
-      final selectedId = selected?.id;
-      selected = _availableProducts
-          .where((product) => product.id == selectedId)
-          .firstOrNull;
+      for (final line in _lines) {
+        final selectedId = line.product?.id;
+        if (selectedId == null) continue;
+        line.product =
+            _availableProducts
+                .where((product) => product.id == selectedId)
+                .firstOrNull ??
+            line.product;
+      }
     }
   }
 
   List<Product> get _availableProducts => _products;
 
+  _SaleLine _createLine() {
+    final line = _SaleLine(id: _nextLineId++, product: null);
+    line.quantity.addListener(_onFormChanged);
+    line.rate.addListener(_onFormChanged);
+    return line;
+  }
+
   bool get _formReady {
-    final product = selected;
-    final count = int.tryParse(quantity.text.trim());
-    final appliedRate = int.tryParse(rate.text.trim());
-    return store.text.trim().isNotEmpty &&
+    return _lines.isNotEmpty &&
+        _lines.length <= 10 &&
+        store.text.trim().isNotEmpty &&
         contact.text.trim().isNotEmpty &&
         location.text.trim().isNotEmpty &&
-        product != null &&
-        product.active &&
-        product.quantity > 0 &&
-        count != null &&
-        count > 0 &&
-        count <= product.quantity &&
-        appliedRate != null &&
-        appliedRate >= 0;
+        _lines.every((line) {
+          final product = line.product;
+          final count = int.tryParse(line.quantity.text.trim());
+          final appliedRate = int.tryParse(line.rate.text.trim());
+          return product != null &&
+              product.active &&
+              product.quantity > 0 &&
+              count != null &&
+              count > 0 &&
+              count <= product.quantity &&
+              appliedRate != null &&
+              appliedRate >= 0;
+        }) &&
+        _lines.map((line) => line.product?.id).toSet().length == _lines.length;
   }
 
   void _onFormChanged() {
@@ -112,13 +133,12 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
     store.removeListener(_onFormChanged);
     contact.removeListener(_onFormChanged);
     location.removeListener(_onFormChanged);
-    quantity.removeListener(_onFormChanged);
-    rate.removeListener(_onFormChanged);
     store.dispose();
     contact.dispose();
     location.dispose();
-    quantity.dispose();
-    rate.dispose();
+    for (final line in _lines) {
+      _disposeLine(line);
+    }
     super.dispose();
   }
 
@@ -127,28 +147,38 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
 
   Future<void> submit() async {
     if (submitting || formKey.currentState?.validate() != true) return;
-    final product = selected;
-    final count = int.tryParse(quantity.text.trim());
-    final appliedRate = int.tryParse(rate.text.trim());
-    if (product == null || !product.active || product.quantity == 0) {
-      showMessage('This product is unavailable.');
-      return;
-    }
-    if (count == null || count <= 0) {
-      showMessage('Enter a positive whole-number quantity.');
-      return;
-    }
-    if (count > product.quantity) {
-      showMessage('Only ${product.quantity} units are remaining.');
-      return;
-    }
-    if (appliedRate == null || appliedRate < 0) {
-      showMessage('Enter a valid rate of zero or more.');
-      return;
+    final items = <Map<String, Object>>[];
+    for (final line in _lines) {
+      final product = line.product;
+      final count = int.tryParse(line.quantity.text.trim());
+      final appliedRate = int.tryParse(line.rate.text.trim());
+      if (product == null || !product.active || product.quantity == 0) {
+        showMessage('Every product must be available.');
+        return;
+      }
+      if (count == null || count <= 0) {
+        showMessage('Enter a positive whole-number quantity for each product.');
+        return;
+      }
+      if (count > product.quantity) {
+        showMessage(
+          'Only ${product.quantity} units of ${product.name} remain.',
+        );
+        return;
+      }
+      if (appliedRate == null || appliedRate < 0) {
+        showMessage('Enter a valid rate for each product.');
+        return;
+      }
+      items.add({
+        'productId': product.id,
+        'quantity': count,
+        'rate': appliedRate,
+      });
     }
     final fingerprint =
-        '${product.id}|$count|$appliedRate|${store.text.trim()}|'
-        '${contact.text.trim()}|${location.text.trim()}';
+        '${items.map((item) => item.toString()).join('|')}|'
+        '${store.text.trim()}|${contact.text.trim()}|${location.text.trim()}';
     if (_requestFingerprint != fingerprint) {
       requestId = const Uuid().v4();
       _requestFingerprint = fingerprint;
@@ -156,26 +186,43 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
 
     setState(() => submitting = true);
     try {
-      _products = await widget.onSubmitSale(
-        requestId: requestId,
-        product: product,
-        quantity: count,
-        rate: appliedRate,
-        store: store.text.trim(),
-        contact: contact.text.trim(),
-        location: location.text.trim(),
-      );
-      selected = _availableProducts
-          .where((item) => item.id == product.id)
-          .firstOrNull;
-      rate.text = selected?.rate.toString() ?? rate.text;
+      if (items.length == 1) {
+        final item = items.single;
+        final product = _lines.single.product!;
+        _products = await widget.onSubmitSale(
+          requestId: requestId,
+          product: product,
+          quantity: item['quantity']! as int,
+          rate: item['rate']! as int,
+          store: store.text.trim(),
+          contact: contact.text.trim(),
+          location: location.text.trim(),
+        );
+      } else {
+        final submitOrder = widget.onSubmitOrder;
+        if (submitOrder == null) {
+          throw StateError('Multi-product sales are not configured.');
+        }
+        _products = await submitOrder(
+          requestId: requestId,
+          items: items,
+          store: store.text.trim(),
+          contact: contact.text.trim(),
+          location: location.text.trim(),
+        );
+      }
       if (!mounted) return;
       widget.onStoreChanged(
         store.text.trim(),
         contact.text.trim(),
         location.text.trim(),
       );
-      quantity.clear();
+      for (final line in _lines) {
+        _disposeLine(line);
+      }
+      _lines
+        ..clear()
+        ..add(_createLine());
       requestId = const Uuid().v4();
       _requestFingerprint = null;
       showMessage('Sale submitted.');
@@ -184,6 +231,214 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
     } finally {
       if (mounted) setState(() => submitting = false);
     }
+  }
+
+  List<Product> _productsFor(_SaleLine line) =>
+      _availableProducts
+          .where(
+            (product) =>
+                product.id == line.product?.id ||
+                !_lines.any(
+                  (other) =>
+                      other.id != line.id && other.product?.id == product.id,
+                ),
+          )
+          .toList()
+        ..addAll(
+          line.product != null &&
+                  !_availableProducts.any(
+                    (product) => product.id == line.product!.id,
+                  )
+              ? [line.product!]
+              : const [],
+        );
+
+  void _addLine() {
+    if (_lines.length >= 10) return;
+    setState(() {
+      _showProductValidation = true;
+      _lines.add(_createLine());
+    });
+  }
+
+  void _removeLine(_SaleLine line) {
+    if (_lines.length <= 1) return;
+    setState(() {
+      _lines.remove(line);
+      _disposeLine(line);
+    });
+  }
+
+  void _disposeLine(_SaleLine line) {
+    line.quantity.removeListener(_onFormChanged);
+    line.rate.removeListener(_onFormChanged);
+    line.quantity.dispose();
+    line.rate.dispose();
+  }
+
+  Widget _buildSaleLine(_SaleLine line, int index) {
+    final products = _productsFor(line);
+    final product = line.product;
+    return Card(
+      key: ValueKey('seller-sale-line-${line.id}'),
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Product ${index + 1} of 10',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                IconButton(
+                  key: index == 0
+                      ? const Key('seller-add-product')
+                      : ValueKey('seller-add-product-${index + 1}'),
+                  tooltip: _lines.length >= 10
+                      ? 'Maximum 10 products'
+                      : 'Add product',
+                  onPressed: submitting || _lines.length >= 10
+                      ? null
+                      : _addLine,
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                  ),
+                  icon: const Icon(Icons.add),
+                ),
+                if (_lines.length > 1)
+                  IconButton(
+                    key: ValueKey('seller-remove-product-${index + 1}'),
+                    tooltip: 'Remove product',
+                    onPressed: submitting ? null : () => _removeLine(line),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                    ),
+                    icon: const Icon(Icons.remove),
+                  ),
+              ],
+            ),
+            LabeledField(
+              label: 'Product',
+              child: DropdownButtonFormField<Product>(
+                key: index == 0
+                    ? const Key('seller-product')
+                    : ValueKey('seller-product-${index + 1}'),
+                initialValue: product,
+                isExpanded: true,
+                autovalidateMode: _showProductValidation
+                    ? AutovalidateMode.always
+                    : AutovalidateMode.disabled,
+                items: products
+                    .map(
+                      (candidate) => DropdownMenuItem(
+                        value: candidate,
+                        enabled: candidate.active && candidate.quantity > 0,
+                        child: Text(
+                          '${candidate.name} — Remaining: ${candidate.quantity}'
+                          '${candidate.quantity == 0 ? ' · Unavailable' : ''}',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                    .toList(),
+                validator: (selected) {
+                  if (selected == null) return 'Product is required';
+                  if (!selected.active || selected.quantity <= 0) {
+                    return 'This product is unavailable';
+                  }
+                  if (_lines.any(
+                    (other) =>
+                        other.id != line.id && other.product?.id == selected.id,
+                  )) {
+                    return 'Select a different product';
+                  }
+                  return null;
+                },
+                onChanged: submitting
+                    ? null
+                    : (selected) => setState(() {
+                        line.product = selected;
+                        line.rate.text = selected?.rate.toString() ?? '';
+                      }),
+                hint: const Text('Select a product'),
+              ),
+            ),
+            if (product != null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    product.active && product.quantity > 0
+                        ? '${product.quantity} units available'
+                        : 'Out of stock',
+                    style: TextStyle(
+                      color: product.active && product.quantity > 0
+                          ? Colors.green.shade800
+                          : Colors.red,
+                    ),
+                  ),
+                ),
+              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: LabeledField(
+                    label: 'Quantity',
+                    child: TextFormField(
+                      key: index == 0
+                          ? const Key('seller-quantity')
+                          : ValueKey('seller-quantity-${index + 1}'),
+                      controller: line.quantity,
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        final count = int.tryParse(value?.trim() ?? '');
+                        if (count == null || count <= 0) {
+                          return 'Enter a whole number';
+                        }
+                        if (count > (line.product?.quantity ?? 0)) {
+                          return 'Exceeds remaining stock';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: LabeledField(
+                    label: 'Rate',
+                    child: TextFormField(
+                      key: index == 0
+                          ? const Key('seller-rate')
+                          : ValueKey('seller-rate-${index + 1}'),
+                      controller: line.rate,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: false,
+                      ),
+                      validator: (value) {
+                        final parsed = int.tryParse(value?.trim() ?? '');
+                        return parsed == null || parsed < 0
+                            ? 'Enter a valid rate'
+                            : null;
+                      },
+                      decoration: const InputDecoration(prefixText: '₹ '),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void showMessage(String message) => ScaffoldMessenger.of(context)
@@ -262,34 +517,6 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
                       validator: requiredValue,
                     ),
                   ),
-                  LabeledField(
-                    label: 'Product',
-                    child: DropdownButtonFormField<Product>(
-                      initialValue: selected,
-                      isExpanded: true,
-                      items: _availableProducts
-                          .map(
-                            (product) => DropdownMenuItem(
-                              value: product,
-                              enabled: product.active && product.quantity > 0,
-                              child: Text(
-                                '${product.name} — Remaining: ${product.quantity}'
-                                '${product.quantity == 0 ? ' · Unavailable' : ''}',
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      validator: (product) => product == null
-                          ? 'Select an available product'
-                          : null,
-                      onChanged: (product) => setState(() {
-                        selected = product;
-                        rate.text = product?.rate.toString() ?? '';
-                      }),
-                      hint: const Text('Select a product'),
-                    ),
-                  ),
                   if (widget.hasMoreProducts &&
                       widget.onLoadMoreProducts != null)
                     Align(
@@ -318,67 +545,8 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
                         ),
                       ),
                     ),
-                  if (selected case final product?)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          product.quantity > 0 && product.active
-                              ? '${product.quantity} units available'
-                              : 'Out of stock',
-                          style: TextStyle(
-                            color: product.quantity > 0 && product.active
-                                ? Colors.green.shade800
-                                : Colors.red,
-                          ),
-                        ),
-                      ),
-                    ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: LabeledField(
-                          label: 'Quantity',
-                          child: TextFormField(
-                            key: const Key('seller-quantity'),
-                            controller: quantity,
-                            keyboardType: TextInputType.number,
-                            validator: (value) {
-                              final parsed = int.tryParse(value?.trim() ?? '');
-                              if (parsed == null || parsed <= 0) {
-                                return 'Enter a whole number';
-                              }
-                              if (parsed > (selected?.quantity ?? 0)) {
-                                return 'Exceeds remaining stock';
-                              }
-                              return null;
-                            },
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: LabeledField(
-                          label: 'Rate',
-                          child: TextFormField(
-                            key: const Key('seller-rate'),
-                            controller: rate,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: false,
-                            ),
-                            validator: (value) {
-                              final parsed = int.tryParse(value?.trim() ?? '');
-                              return parsed == null || parsed < 0
-                                  ? 'Enter a valid rate'
-                                  : null;
-                            },
-                            decoration: const InputDecoration(prefixText: '₹ '),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                  for (var index = 0; index < _lines.length; index++)
+                    _buildSaleLine(_lines[index], index),
                   LabeledField(
                     label: 'Date & time',
                     child: TextFormField(
@@ -451,4 +619,15 @@ String _formatTime(DateTime time) {
   final hour = time.hour % 12 == 0 ? 12 : time.hour % 12;
   return '$hour:${time.minute.toString().padLeft(2, '0')} '
       '${time.hour >= 12 ? 'PM' : 'AM'}';
+}
+
+class _SaleLine {
+  _SaleLine({required this.id, required this.product})
+    : quantity = TextEditingController(),
+      rate = TextEditingController(text: product?.rate.toString() ?? '');
+
+  final int id;
+  Product? product;
+  final TextEditingController quantity;
+  final TextEditingController rate;
 }

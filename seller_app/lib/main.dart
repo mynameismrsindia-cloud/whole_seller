@@ -191,6 +191,30 @@ class _SellerAppState extends ConsumerState<SellerApp> {
                           if (mounted) setState(() {});
                           return products;
                         },
+                    onSubmitOrder:
+                        ({
+                          required String requestId,
+                          required List<Map<String, Object>> items,
+                          required String store,
+                          required String contact,
+                          required String location,
+                        }) async {
+                          final repository = ref.read(apiRepositoryProvider);
+                          await repository.submitOrder(
+                            requestId: requestId,
+                            items: items,
+                            store: store,
+                            contact: contact,
+                            location: location,
+                          );
+                          final page = await repository.products(
+                            forceRefresh: true,
+                          );
+                          products = page.items;
+                          productCursor = page.nextCursor;
+                          if (mounted) setState(() {});
+                          return products;
+                        },
                     onStoreChanged: (s, c, l) => setState(() {
                       store = s;
                       contact = c;

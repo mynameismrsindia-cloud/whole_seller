@@ -155,6 +155,11 @@ class ApiRepository {
     );
   }
 
+  Future<List<Sale>> salesOrder(String requestId) async {
+    final items = await api.salesOrder(requestId);
+    return items.map(Sale.fromJson).toList(growable: false);
+  }
+
   Future<void> updateSaleStatus(Sale sale, OrderStatus status) async {
     if (status != OrderStatus.approved) {
       throw StateError('A sale can only be approved.');

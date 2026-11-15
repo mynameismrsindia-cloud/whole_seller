@@ -1,9 +1,9 @@
 # Seller App
 
-Flutter Android app for Seller registration, sales entry with a product
-dropdown, and a profile card showing the seller's name and email. It connects
-to the NestJS + PostgreSQL API; Firebase Auth, Firestore, and Google Sign-In
-are not required.
+Flutter Android app for Seller registration and sales entry for up to 10
+products per order, with product dropdowns and a profile card showing the
+seller's name and email. It connects to the NestJS + PostgreSQL API; Firebase
+Auth, Firestore, and Google Sign-In are not required.
 
 ```sh
 flutter pub get

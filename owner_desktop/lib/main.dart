@@ -225,7 +225,10 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
 
   Future<void> _downloadSaleInvoice(Sale sale) async {
     try {
-      await saveSaleInvoicePdf(sale);
+      final orderItems = sale.requestId.isEmpty
+          ? [sale]
+          : await ref.read(apiRepositoryProvider).salesOrder(sale.requestId);
+      await saveSaleInvoicePdf(sale, orderItems: orderItems);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Invoice PDF downloaded.')),

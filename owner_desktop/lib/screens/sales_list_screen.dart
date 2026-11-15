@@ -147,6 +147,7 @@ class _SalesListScreenState extends State<SalesListScreen> {
                   child: DataTable(
                     columns: const [
                       DataColumn(label: Text('Date & time')),
+                      DataColumn(label: Text('Order')),
                       DataColumn(label: Text('Salesman')),
                       DataColumn(label: Text('Store')),
                       DataColumn(label: Text('Contact')),
@@ -163,6 +164,21 @@ class _SalesListScreenState extends State<SalesListScreen> {
                           DataCell(
                             Text(
                               '${_date(sale.createdAt)}\n${_time(sale.createdAt)}',
+                            ),
+                          ),
+                          DataCell(
+                            Tooltip(
+                              message: sale.requestId,
+                              child: Text(
+                                sale.requestId.isEmpty
+                                    ? '—'
+                                    : sale.requestId.substring(
+                                        0,
+                                        sale.requestId.length < 8
+                                            ? sale.requestId.length
+                                            : 8,
+                                      ),
+                              ),
                             ),
                           ),
                           DataCell(Text(sale.salesman)),

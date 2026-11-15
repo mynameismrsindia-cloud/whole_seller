@@ -139,5 +139,21 @@ class ApiRepository {
     );
   }
 
+  Future<void> submitOrder({
+    required String requestId,
+    required List<Map<String, Object>> items,
+    required String store,
+    required String contact,
+    required String location,
+  }) async {
+    await api.submitOrder(
+      requestId: requestId,
+      items: items,
+      store: store,
+      contact: contact,
+      location: location,
+    );
+  }
+
   void invalidateProducts() => api.invalidateProducts();
 }

@@ -33,8 +33,28 @@ void main() {
     await _pumpSalesEntry(tester);
 
     expect(find.byType(DropdownButtonFormField<Product>), findsOneWidget);
+    expect(find.text('Select a product'), findsOneWidget);
+    expect(find.text('Rice — Remaining: 10'), findsNothing);
+    await tester.tap(find.byKey(const Key('seller-product')));
+    await tester.pumpAndSettle();
     expect(find.text('Rice — Remaining: 10'), findsOneWidget);
     expect(find.byKey(const Key('seller-product-search')), findsNothing);
+  });
+
+  testWidgets('product options come only from the supplied catalog', (
+    tester,
+  ) async {
+    final catalog = [
+      Product(id: 'dynamic-id', name: 'Dynamic Item', quantity: 7, rate: 31),
+    ];
+    await _pumpSalesEntry(tester, products: catalog);
+
+    expect(find.text('Select a product'), findsOneWidget);
+    expect(find.text('Rice — Remaining: 10'), findsNothing);
+    await tester.tap(find.byKey(const Key('seller-product')));
+    await tester.pumpAndSettle();
+    expect(find.text('Dynamic Item — Remaining: 7'), findsOneWidget);
+    expect(find.text('Rice — Remaining: 10'), findsNothing);
   });
 
   testWidgets('submit button is grey until required fields are filled', (
@@ -57,6 +77,10 @@ void main() {
       '1234567890',
     );
     await tester.enterText(find.byKey(const Key('store-location')), 'Kolkata');
+    await tester.tap(find.byKey(const Key('seller-product')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rice — Remaining: 10'));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('seller-quantity')), '2');
     await tester.pump();
 
@@ -135,6 +159,10 @@ void main() {
       '1234567890',
     );
     await tester.enterText(find.byKey(const Key('store-location')), 'Kolkata');
+    await tester.tap(find.byKey(const Key('seller-product')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rice — Remaining: 10'));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('seller-quantity')), '2');
     await tester.ensureVisible(find.byKey(const Key('seller-submit')));
     await tester.pumpAndSettle();
@@ -142,8 +170,90 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Sale submitted.'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('seller-product')));
+    await tester.pumpAndSettle();
     expect(find.text('Rice — Remaining: 8'), findsOneWidget);
     expect(submittedQuantity, 2);
+  });
+
+  testWidgets('seller can submit a multi-product sale as one order', (
+    tester,
+  ) async {
+    final catalog = [
+      _testProduct(),
+      Product(id: 'lentils', name: 'Lentils', quantity: 8, rate: 40),
+    ];
+    List<Map<String, Object>>? submittedItems;
+    await _pumpSalesEntry(
+      tester,
+      products: catalog,
+      onSubmitOrder:
+          ({
+            required requestId,
+            required items,
+            required store,
+            required contact,
+            required location,
+          }) async {
+            submittedItems = items;
+            return catalog;
+          },
+    );
+
+    await tester.tap(find.byKey(const Key('seller-add-product')));
+    await tester.pumpAndSettle();
+    expect(find.byType(DropdownButtonFormField<Product>), findsNWidgets(2));
+    expect(find.text('Product 2 of 10'), findsOneWidget);
+    expect(find.text('Product is required'), findsNWidgets(2));
+    await tester.ensureVisible(find.byKey(const Key('seller-product')));
+    await tester.tap(find.byKey(const Key('seller-product')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rice — Remaining: 10'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('seller-product-2')));
+    await tester.tap(find.byKey(const Key('seller-product-2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lentils — Remaining: 8'));
+    await tester.pumpAndSettle();
+    expect(find.text('Product is required'), findsNothing);
+
+    await tester.enterText(find.byKey(const Key('store-name')), 'Store');
+    await tester.enterText(
+      find.byKey(const Key('store-contact')),
+      '1234567890',
+    );
+    await tester.enterText(find.byKey(const Key('store-location')), 'Kolkata');
+    await tester.enterText(find.byKey(const Key('seller-quantity')), '2');
+    await tester.enterText(find.byKey(const Key('seller-rate')), '73');
+    await tester.enterText(find.byKey(const Key('seller-quantity-2')), '3');
+    await tester.enterText(find.byKey(const Key('seller-rate-2')), '40');
+    await tester.ensureVisible(find.byKey(const Key('seller-submit')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('seller-submit')));
+    await tester.pumpAndSettle();
+
+    expect(submittedItems, [
+      {'productId': 'rice', 'quantity': 2, 'rate': 73},
+      {'productId': 'lentils', 'quantity': 3, 'rate': 40},
+    ]);
+    expect(find.text('Sale submitted.'), findsOneWidget);
+  });
+
+  testWidgets('seller cannot add more than ten products', (tester) async {
+    await _pumpSalesEntry(tester);
+
+    for (var index = 1; index < 10; index++) {
+      await tester.tap(find.byKey(const Key('seller-add-product')));
+      await tester.pump();
+    }
+
+    expect(find.text('Product 10 of 10'), findsOneWidget);
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const Key('seller-add-product')))
+          .onPressed,
+      isNull,
+    );
   });
 }
 
@@ -152,6 +262,7 @@ Product _testProduct() =>
 
 Future<void> _pumpSalesEntry(
   WidgetTester tester, {
+  List<Product>? products,
   Future<List<Product>> Function({
     required String requestId,
     required Product product,
@@ -162,6 +273,14 @@ Future<void> _pumpSalesEntry(
     required String location,
   })?
   onSubmitSale,
+  Future<List<Product>> Function({
+    required String requestId,
+    required List<Map<String, Object>> items,
+    required String store,
+    required String contact,
+    required String location,
+  })?
+  onSubmitOrder,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -171,7 +290,7 @@ Future<void> _pumpSalesEntry(
           store: '',
           contact: '',
           location: '',
-          products: [_testProduct()],
+          products: products ?? [_testProduct()],
           onStoreChanged: (_, _, _) {},
           onSubmitSale:
               onSubmitSale ??
@@ -184,6 +303,7 @@ Future<void> _pumpSalesEntry(
                 required contact,
                 required location,
               }) async => [_testProduct()],
+          onSubmitOrder: onSubmitOrder,
         ),
       ),
     ),

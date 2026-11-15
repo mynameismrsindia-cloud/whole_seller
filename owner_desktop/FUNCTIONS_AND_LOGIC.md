@@ -15,12 +15,12 @@
 - Product mutations invalidate the product cache and refresh the list. API-side validation remains authoritative.
 
 ## Sales and approval
-- Sales list shows Indian date/time, seller, store/contact/location, product, quantity, rate, and order status. User IDs are not shown; the total column is omitted.
+- Sales list shows Indian date/time, a shared order reference, seller, store/contact/location, product, quantity, rate, and order status. Each product in a multi-product sale appears as a separate line with the same order reference. User IDs are not shown; the total column is omitted.
 - Entries are ordered newest first. Owner can filter by date range, clear the filter, refresh, and load additional pages.
-- Each sale row has a PDF action that downloads an invoice with the sale ID, date/time, seller, store/contact/location, product, quantity, rate, total, and order status.
+- Each sale row has a PDF action that downloads one complete order invoice, including all products in that order, the shared order reference, date/time, seller, store/contact/location, per-product quantity/rate/amount, total, and order status.
 - Total is `quantity × rate`. A pending sale can be approved once; approved sales cannot be changed back to pending. The API enforces Owner authorization and the one-way status transition.
 - After approval succeeds, the row immediately changes to an Approved badge and its approval action is disabled.
-- Sales are submitted by the Seller app; the API records each sale and deducts stock transactionally, rejecting insufficient stock.
+- Sales are submitted by the Seller app (up to 10 different products per order); the API records the lines and deducts all stock transactionally, rejecting the entire order if any line is invalid or out of stock.
 
 ## Account and layout
 - The Profile page has been removed. The desktop navigation shows the signed-in owner's logo, name, and email, with Log out at the bottom.

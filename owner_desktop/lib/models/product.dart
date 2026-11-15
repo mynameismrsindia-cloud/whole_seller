@@ -22,6 +22,7 @@ class Product {
 class Sale {
   Sale({
     this.id = '',
+    this.requestId = '',
     required this.salesman,
     required this.userId,
     required this.store,
@@ -36,6 +37,7 @@ class Sale {
   });
 
   final String id;
+  final String requestId;
   final String salesman;
   final String userId;
   final String store;
@@ -55,6 +57,7 @@ class Sale {
         DateTime.fromMillisecondsSinceEpoch(0);
     return Sale(
       id: json['id']?.toString() ?? '',
+      requestId: json['requestId']?.toString() ?? '',
       salesman: json['salesman']?.toString() ?? '',
       userId: json['sellerId']?.toString() ?? '',
       store: json['store']?.toString() ?? '',

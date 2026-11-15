@@ -290,6 +290,16 @@ class WholesaleApiClient {
     );
   }
 
+  Future<List<Map<String, dynamic>>> salesOrder(String requestId) async {
+    final response = await _request(
+      'GET',
+      '/sales/orders/${Uri.encodeComponent(requestId)}',
+    );
+    final items = response['items'];
+    if (items is List) return _mapList(items);
+    throw const FormatException('The API returned an invalid sales order.');
+  }
+
   Future<void> approveSale(String id) async {
     await _request(
       'PATCH',

@@ -200,6 +200,7 @@ void main() {
   ) async {
     final sale = Sale(
       id: 'sale-1',
+      requestId: 'batch-order-1234',
       salesman: 'Seller Name',
       userId: 'private-user-id',
       store: 'Store',
@@ -243,6 +244,7 @@ void main() {
     final columns = tester.widget<DataTable>(find.byType(DataTable)).columns;
     expect(columns.map((column) => (column.label as Text).data), [
       'Date & time',
+      'Order',
       'Salesman',
       'Store',
       'Contact',
@@ -253,6 +255,7 @@ void main() {
       'Order status',
       'Action',
     ]);
+    expect(find.text('batch-or'), findsOneWidget);
     expect(find.text('Total'), findsNothing);
     final tableScrollbar = tester.widget<Scrollbar>(find.byType(Scrollbar));
     expect(tableScrollbar.thumbVisibility, isTrue);

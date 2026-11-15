@@ -6,9 +6,15 @@ import 'package:pdf/widgets.dart' as pw;
 
 import '../models/product.dart';
 
-Future<Uint8List> buildSaleInvoicePdf(Sale sale) async {
+Future<Uint8List> buildSaleInvoicePdf(
+  Sale sale, {
+  List<Sale>? orderItems,
+}) async {
   final document = pw.Document();
-  final indiaTime = sale.createdAt.toUtc().add(const Duration(hours: 5, minutes: 30));
+  final items = orderItems == null || orderItems.isEmpty ? [sale] : orderItems;
+  final indiaTime = sale.createdAt.toUtc().add(
+    const Duration(hours: 5, minutes: 30),
+  );
   final saleDate =
       '${indiaTime.day.toString().padLeft(2, '0')} '
       '${_month(indiaTime.month)} ${indiaTime.year}';
@@ -16,16 +22,24 @@ Future<Uint8List> buildSaleInvoicePdf(Sale sale) async {
       '${indiaTime.hour.toString().padLeft(2, '0')}:'
       '${indiaTime.minute.toString().padLeft(2, '0')}';
   final details = <(String, String)>[
-    ('Invoice number', sale.id),
+    (
+      'Invoice / order number',
+      sale.requestId.isEmpty ? sale.id : sale.requestId,
+    ),
     ('Date & time', '$saleDate, $saleTime IST'),
     ('Salesman', sale.salesman),
     ('Store', sale.store),
     ('Contact', sale.contact),
     ('Location', sale.location),
-    ('Product', '${sale.productName} (${sale.productId})'),
-    ('Quantity', '${sale.quantity}'),
-    ('Rate per unit', 'INR ${sale.rate}'),
   ];
+  final totalAmount = items.fold<int>(
+    0,
+    (total, item) => total + item.totalAmount,
+  );
+  final orderStatus =
+      items.any((item) => item.orderStatus == OrderStatus.pending)
+      ? OrderStatus.pending
+      : OrderStatus.approved;
 
   document.addPage(
     pw.Page(
@@ -57,27 +71,60 @@ Future<Uint8List> buildSaleInvoicePdf(Sale sale) async {
             },
             children: [
               for (final (label, value) in details)
+                pw.TableRow(children: [_cell(label, bold: true), _cell(value)]),
+            ],
+          ),
+          pw.SizedBox(height: 18),
+          pw.Table(
+            border: pw.TableBorder.all(color: PdfColors.grey300),
+            columnWidths: const <int, pw.TableColumnWidth>{
+              0: pw.FlexColumnWidth(2),
+              1: pw.FlexColumnWidth(0.7),
+              2: pw.FlexColumnWidth(1),
+              3: pw.FlexColumnWidth(1),
+              4: pw.FlexColumnWidth(1.3),
+            },
+            children: [
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                children: [
+                  _cell('Product', bold: true),
+                  _cell('Qty', bold: true),
+                  _cell('Rate', bold: true),
+                  _cell('Amount', bold: true),
+                  _cell('Product ID', bold: true),
+                ],
+              ),
+              for (final item in items)
                 pw.TableRow(
                   children: [
-                    _cell(label, bold: true),
-                    _cell(value),
+                    _cell(item.productName),
+                    _cell('${item.quantity}'),
+                    _cell('INR ${item.rate}'),
+                    _cell('INR ${item.totalAmount}'),
+                    _cell(item.productId),
                   ],
                 ),
               pw.TableRow(
                 decoration: const pw.BoxDecoration(color: PdfColors.teal50),
                 children: [
                   _cell('Total amount', bold: true),
-                  _cell('INR ${sale.totalAmount}', bold: true),
+                  _cell(''),
+                  _cell(''),
+                  _cell('INR $totalAmount', bold: true),
+                  _cell(''),
                 ],
               ),
               pw.TableRow(
                 children: [
-                  _cell('Order status', bold: true),
                   _cell(
-                    sale.orderStatus == OrderStatus.pending
-                        ? 'Pending'
-                        : 'Approved',
+                    'Order status: ${orderStatus == OrderStatus.pending ? 'Pending' : 'Approved'}',
+                    bold: true,
                   ),
+                  _cell(''),
+                  _cell(''),
+                  _cell(''),
+                  _cell(''),
                 ],
               ),
             ],
@@ -96,11 +143,12 @@ Future<Uint8List> buildSaleInvoicePdf(Sale sale) async {
   return document.save();
 }
 
-Future<void> saveSaleInvoicePdf(Sale sale) async {
-  final safeId = sale.id.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+Future<void> saveSaleInvoicePdf(Sale sale, {List<Sale>? orderItems}) async {
+  final invoiceId = sale.requestId.isEmpty ? sale.id : sale.requestId;
+  final safeId = invoiceId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
   await FileSaver.instance.saveFile(
     name: safeId.isEmpty ? 'sale_invoice' : 'sale_invoice_$safeId',
-    bytes: await buildSaleInvoicePdf(sale),
+    bytes: await buildSaleInvoicePdf(sale, orderItems: orderItems),
     fileExtension: 'pdf',
     mimeType: MimeType.pdf,
   );

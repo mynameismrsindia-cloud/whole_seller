@@ -9,12 +9,13 @@
 
 ## Sales entry
 - The product list is loaded from the API in pages of 50. Use **Load more products** for another page; refresh manually or when returning to the entry tab.
-- Products are selected from a dropdown; there is no product search. Inactive and out-of-stock products cannot be selected.
-- Store name, contact, location, product, a positive whole-number quantity within displayed stock, and a non-negative whole-number rate are required.
+- Each sale can contain up to 10 different products. Add/remove controls manage product rows; each row requires a product, positive whole-number quantity within displayed stock, and non-negative whole-number rate. A product cannot be repeated in the same sale.
+- Products are selected from dropdowns; there is no product search. Inactive and out-of-stock products cannot be selected.
+- Store name, contact, and location are required for the whole sale.
 - **Submit Entry** stays grey until these values are valid and becomes green when ready. A submission-in-progress state prevents repeated taps.
 - The date and time field displays India Standard Time (IST); it is not an editable date picker.
-- Each submission includes a unique idempotency key. On success the app clears quantity, retains store details, and reloads products to show updated stock.
-- The API computes total as `quantity × rate` and atomically checks/deducts stock with the sale insert. Insufficient stock or inactive products are rejected server-side, even if the app's displayed stock is old.
+- Each submission includes a unique idempotency key shared by all product rows. On success the app clears the sale rows, retains store details, and reloads products to show updated stock.
+- The API computes each line total as `quantity × rate` and atomically checks/deducts stock and inserts every line in one transaction. If any product is unavailable or has insufficient stock, the entire sale is rejected without partial stock changes.
 
 ## Profile and navigation
 - **My Profile** displays one card with the signed-in seller's name and email only.

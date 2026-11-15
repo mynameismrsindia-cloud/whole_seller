@@ -249,6 +249,35 @@ class WholesaleApiClient {
     return result;
   }
 
+  Future<Map<String, dynamic>> submitOrder({
+    required String requestId,
+    required List<Map<String, Object>> items,
+    required String store,
+    required String contact,
+    required String location,
+  }) async {
+    if (items.length > 10) {
+      throw ArgumentError.value(
+        items.length,
+        'items',
+        'A sale can contain at most 10 products.',
+      );
+    }
+    final result = await _request(
+      'POST',
+      '/sales',
+      headers: {'Idempotency-Key': requestId},
+      body: {
+        'items': items,
+        'store': store,
+        'contact': contact,
+        'location': location,
+      },
+    );
+    invalidateProducts();
+    return result;
+  }
+
   Future<ApiPage> sales({
     String? start,
     String? end,

@@ -25,15 +25,25 @@ jobs:
           flutter-version: "3.41.0"
           channel: stable
           cache: true
-      - name: Validate Windows code-signing configuration
+      - name: Check Windows code-signing configuration
+        id: signing
         shell: pwsh
         env:
           WINDOWS_SIGNING_CERTIFICATE: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE }}
           WINDOWS_SIGNING_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PASSWORD }}
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE) -or
-              [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_PASSWORD)) {
-            throw 'Configure the WINDOWS_SIGNING_CERTIFICATE and WINDOWS_SIGNING_PASSWORD Actions secrets with a trusted code-signing certificate before building a distributable installer.'
+          $certificateConfigured = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE)
+          $passwordConfigured = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_PASSWORD)
+
+          if ($certificateConfigured -ne $passwordConfigured) {
+            throw 'Set both WINDOWS_SIGNING_CERTIFICATE and WINDOWS_SIGNING_PASSWORD, or remove both secrets to build without signing.'
+          }
+
+          if ($certificateConfigured) {
+            "enabled=true" >> $env:GITHUB_OUTPUT
+          } else {
+            "enabled=false" >> $env:GITHUB_OUTPUT
+            Write-Warning 'Building without code signing. Windows Smart App Control may block the installer.'
           }
       - name: Build Windows release
         working-directory: owner_desktop
@@ -53,6 +63,7 @@ jobs:
           flutter pub get
           flutter build windows --release --dart-define=API_BASE_URL=$apiBaseUrl
       - name: Sign Owner application
+        if: steps.signing.outputs.enabled == 'true'
         shell: pwsh
         env:
           WINDOWS_SIGNING_CERTIFICATE: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE }}
@@ -90,6 +101,7 @@ jobs:
             throw "Inno Setup failed with exit code $LASTEXITCODE."
           }
       - name: Sign installer
+        if: steps.signing.outputs.enabled == 'true'
         shell: pwsh
         env:
           WINDOWS_SIGNING_CERTIFICATE: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE }}

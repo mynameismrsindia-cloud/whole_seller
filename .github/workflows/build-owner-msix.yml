@@ -1,0 +1,136 @@
+name: Build Owner MSIX for Microsoft Store
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: API environment for this package
+        type: choice
+        options:
+          - production
+          - localhost
+        default: production
+        required: true
+  push:
+    paths:
+      - "owner_desktop/**"
+      - ".github/workflows/build-owner-msix.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.0"
+          channel: stable
+          cache: true
+      - name: Build Windows release
+        working-directory: owner_desktop
+        env:
+          API_ENVIRONMENT: ${{ inputs.environment || 'production' }}
+          PRODUCTION_API_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL || vars.API_BASE_URL || 'https://wholesellerbackend-production.up.railway.app/api/v1' }}
+        run: |
+          $buildVersion = "1.0.$env:GITHUB_RUN_NUMBER"
+          $msixVersion = "$buildVersion.0"
+          if ($env:API_ENVIRONMENT -eq 'localhost') {
+            $apiBaseUrl = 'http://127.0.0.1:3000/api/v1'
+          } else {
+            $apiBaseUrl = $env:PRODUCTION_API_BASE_URL
+            if ([string]::IsNullOrWhiteSpace($apiBaseUrl) -or
+                -not $apiBaseUrl.StartsWith('https://')) {
+              throw 'Set PRODUCTION_API_BASE_URL (or legacy API_BASE_URL) to the deployed HTTPS API URL.'
+            }
+          }
+          flutter pub get
+          flutter build windows --release --build-name $buildVersion --build-number 0 --dart-define=API_BASE_URL=$apiBaseUrl
+          "MSIX_VERSION=$msixVersion" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Create Store submission MSIX
+        working-directory: owner_desktop
+        run: dart run msix:create --version $env:MSIX_VERSION
+      - name: Validate Store submission MSIX
+        shell: pwsh
+        working-directory: owner_desktop
+        run: |
+          $packages = @(Get-ChildItem -Path 'build/msix' -Filter '*.msix' -File)
+          if ($packages.Count -ne 1) {
+            throw "Expected exactly one MSIX package, found $($packages.Count)."
+          }
+
+          $windowsKits = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
+          $makeAppx = Get-ChildItem -Path $windowsKits -Filter 'makeappx.exe' -Recurse -File |
+            Where-Object { $_.Directory.Name -eq 'x64' } |
+            Sort-Object { [version]$_.Directory.Parent.Name } -Descending |
+            Select-Object -First 1
+          if ($null -eq $makeAppx) {
+            throw "Could not find makeappx.exe under '$windowsKits'."
+          }
+
+          $unpackDir = Join-Path $env:RUNNER_TEMP "owner-msix-unpack-$env:GITHUB_RUN_ID"
+          New-Item -ItemType Directory -Force -Path $unpackDir | Out-Null
+          & $makeAppx.FullName unpack /p $packages[0].FullName /d $unpackDir /o
+          if ($LASTEXITCODE -ne 0) {
+            throw "MSIX package unpack validation failed with exit code $LASTEXITCODE."
+          }
+
+          [xml]$manifest = Get-Content -LiteralPath (Join-Path $unpackDir 'AppxManifest.xml')
+          $identity = $manifest.SelectSingleNode("/*[local-name()='Package']/*[local-name()='Identity']")
+          $expected = @{
+            Name = 'PushpenduDas.WholeSalerOwnerPackage'
+            Publisher = 'CN=84FCF719-D297-45CF-B542-80907008BEBC'
+            Version = $env:MSIX_VERSION
+            ProcessorArchitecture = 'x64'
+          }
+          foreach ($key in $expected.Keys) {
+            if ($identity.GetAttribute($key) -ne $expected[$key]) {
+              throw "MSIX identity mismatch for $key. Found '$($identity.GetAttribute($key))'."
+            }
+          }
+
+          $properties = $manifest.SelectSingleNode("/*[local-name()='Package']/*[local-name()='Properties']")
+          if ($properties.SelectSingleNode("*[local-name()='DisplayName']").InnerText -ne 'WholeSale Owner Desktop' -or
+              $properties.SelectSingleNode("*[local-name()='PublisherDisplayName']").InnerText -ne 'Pushpendu Das') {
+            throw 'MSIX display name or publisher display name does not match the Store configuration.'
+          }
+
+          $capabilities = $manifest.SelectNodes("//*[local-name()='Capabilities']/*")
+          $capabilityNames = @($capabilities | ForEach-Object { $_.GetAttribute('Name') })
+          foreach ($capability in @('internetClient', 'runFullTrust')) {
+            if ($capabilityNames -notcontains $capability) {
+              throw "MSIX manifest is missing required capability '$capability'."
+            }
+          }
+
+          $application = $manifest.SelectSingleNode("//*[local-name()='Applications']/*[local-name()='Application']")
+          $executablePath = Join-Path $unpackDir $application.GetAttribute('Executable')
+          if (-not (Test-Path -LiteralPath $executablePath -PathType Leaf)) {
+            throw "MSIX manifest references missing application executable '$($application.GetAttribute('Executable'))'."
+          }
+
+          $imageReferences = $manifest.SelectNodes("//*[local-name()='Logo']/text() | //@*[contains(local-name(),'Logo')] | //@*[local-name()='Image']")
+          foreach ($reference in $imageReferences) {
+            $imagePath = $reference.Value.Trim()
+            if ($imagePath -match '(?i)\.(png|jpg|jpeg)$' -and
+                -not (Test-Path -LiteralPath (Join-Path $unpackDir $imagePath) -PathType Leaf)) {
+              throw "MSIX manifest references missing image '$imagePath'."
+            }
+          }
+
+          $signature = Get-AuthenticodeSignature -FilePath $packages[0].FullName
+          if ($signature.Status -ne 'NotSigned') {
+            throw "Expected an unsigned Store-submission package before Partner Center upload; found '$($signature.Status)'."
+          }
+          Write-Host "Validated MSIX: $($packages[0].FullName)"
+          Write-Host "Size (bytes): $($packages[0].Length)"
+          Write-Host "SHA-256: $((Get-FileHash -LiteralPath $packages[0].FullName -Algorithm SHA256).Hash)"
+          Write-Host "Authenticode status: $($signature.Status); Microsoft Store signs packages distributed through the Store."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: owner-desktop-msix-${{ github.run_number }}
+          path: owner_desktop/build/msix/*.msix
+          if-no-files-found: error
+          retention-days: 14

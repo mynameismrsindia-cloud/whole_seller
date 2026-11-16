@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/product.dart';
+import '../utils/india_date_time.dart';
 
 class SalesListScreen extends StatefulWidget {
   const SalesListScreen({
@@ -16,7 +17,7 @@ class SalesListScreen extends StatefulWidget {
   });
 
   final List<Sale> sales;
-  final void Function(Sale, OrderStatus) onStatusChanged;
+  final void Function(List<Sale>, OrderStatus) onStatusChanged;
   final Future<void> Function(Sale) onDownloadInvoice;
   final DateTimeRange? initialRange;
   final bool hasMore;
@@ -44,7 +45,7 @@ class _SalesListScreenState extends State<SalesListScreen> {
     final visible = widget.sales.where((sale) {
       final selected = selectedRange;
       if (selected == null) return true;
-      final indiaTime = _indiaTime(sale.createdAt);
+      final indiaTime = toIndiaDateTime(sale.createdAt);
       final saleDate = DateTime.utc(
         indiaTime.year,
         indiaTime.month,
@@ -62,6 +63,12 @@ class _SalesListScreenState extends State<SalesListScreen> {
       );
       return !saleDate.isBefore(start) && saleDate.isBefore(end);
     }).toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final grouped = <String, List<Sale>>{};
+    for (final sale in visible) {
+      final orderKey = sale.requestId.isNotEmpty ? sale.requestId : sale.id;
+      (grouped[orderKey] ??= []).add(sale);
+    }
+    final orders = grouped.values.map(_SalesOrder.new).toList();
 
     return Card(
       child: Padding(
@@ -110,8 +117,8 @@ class _SalesListScreenState extends State<SalesListScreen> {
                   label: Text(
                     selectedRange == null
                         ? 'All dates'
-                        : '${_date(selectedRange.start)} – '
-                              '${_date(selectedRange.end)}',
+                        : '${_rangeDate(selectedRange.start)} – '
+                              '${_rangeDate(selectedRange.end)}',
                   ),
                 ),
                 if (selectedRange != null)
@@ -147,7 +154,7 @@ class _SalesListScreenState extends State<SalesListScreen> {
                   child: DataTable(
                     columns: const [
                       DataColumn(label: Text('Date & time')),
-                      DataColumn(label: Text('Order')),
+                      DataColumn(label: Text('Invoice #')),
                       DataColumn(label: Text('Salesman')),
                       DataColumn(label: Text('Store')),
                       DataColumn(label: Text('Contact')),
@@ -158,7 +165,8 @@ class _SalesListScreenState extends State<SalesListScreen> {
                       DataColumn(label: Text('Order status')),
                       DataColumn(label: Text('Action')),
                     ],
-                    rows: visible.map((sale) {
+                    rows: orders.map((order) {
+                      final sale = order.primary;
                       return DataRow(
                         cells: [
                           DataCell(
@@ -169,16 +177,7 @@ class _SalesListScreenState extends State<SalesListScreen> {
                           DataCell(
                             Tooltip(
                               message: sale.requestId,
-                              child: Text(
-                                sale.requestId.isEmpty
-                                    ? '—'
-                                    : sale.requestId.substring(
-                                        0,
-                                        sale.requestId.length < 8
-                                            ? sale.requestId.length
-                                            : 8,
-                                      ),
-                              ),
+                              child: Text(sale.displayInvoiceNumber),
                             ),
                           ),
                           DataCell(Text(sale.salesman)),
@@ -186,23 +185,36 @@ class _SalesListScreenState extends State<SalesListScreen> {
                           DataCell(Text(sale.contact)),
                           DataCell(Text(sale.location)),
                           DataCell(
-                            Text('${sale.productName}\n${sale.productId}'),
+                            Text(
+                              order.items
+                                  .map((item) => item.productName)
+                                  .join('\n'),
+                            ),
                           ),
-                          DataCell(Text('${sale.quantity}')),
-                          DataCell(Text('₹${sale.rate}')),
+                          DataCell(
+                            Text(
+                              order.items
+                                  .map((item) => '${item.quantity}')
+                                  .join('\n'),
+                            ),
+                          ),
+                          DataCell(
+                            Text(
+                              order.items
+                                  .map((item) => '₹${item.rate}')
+                                  .join('\n'),
+                            ),
+                          ),
                           DataCell(
                             Chip(
                               label: Text(
-                                sale.orderStatus == OrderStatus.pending
-                                    ? 'Pending'
-                                    : 'Approved',
+                                order.isPending ? 'Pending' : 'Approved',
                               ),
-                              backgroundColor:
-                                  sale.orderStatus == OrderStatus.pending
+                              backgroundColor: order.isPending
                                   ? Colors.orange.shade100
                                   : Colors.green.shade100,
                               labelStyle: TextStyle(
-                                color: sale.orderStatus == OrderStatus.pending
+                                color: order.isPending
                                     ? Colors.orange.shade900
                                     : Colors.green.shade900,
                                 fontWeight: FontWeight.w600,
@@ -215,17 +227,14 @@ class _SalesListScreenState extends State<SalesListScreen> {
                               children: [
                                 FilledButton(
                                   key: ValueKey('approve-order-${sale.id}'),
-                                  onPressed:
-                                      sale.orderStatus == OrderStatus.pending
+                                  onPressed: order.isPending
                                       ? () => widget.onStatusChanged(
-                                          sale,
+                                          order.items,
                                           OrderStatus.approved,
                                         )
                                       : null,
                                   child: Text(
-                                    sale.orderStatus == OrderStatus.pending
-                                        ? 'Approve'
-                                        : 'Approved',
+                                    order.isPending ? 'Approve' : 'Approved',
                                   ),
                                 ),
                                 IconButton(
@@ -271,21 +280,31 @@ class _SalesListScreenState extends State<SalesListScreen> {
   }
 }
 
+class _SalesOrder {
+  _SalesOrder(this.items);
+
+  final List<Sale> items;
+  Sale get primary => items.first;
+  bool get isPending =>
+      items.any((sale) => sale.orderStatus == OrderStatus.pending);
+}
+
 String _date(DateTime value) {
-  final indiaTime = _indiaTime(value);
+  final indiaTime = toIndiaDateTime(value);
   return '${indiaTime.day.toString().padLeft(2, '0')} '
       '${_month(indiaTime.month)} ${indiaTime.year}';
 }
 
 String _time(DateTime value) {
-  final indiaTime = _indiaTime(value);
+  final indiaTime = toIndiaDateTime(value);
   final hour = indiaTime.hour % 12 == 0 ? 12 : indiaTime.hour % 12;
   return '$hour:${indiaTime.minute.toString().padLeft(2, '0')} '
       '${indiaTime.hour >= 12 ? 'PM' : 'AM'}';
 }
 
-DateTime _indiaTime(DateTime value) =>
-    value.toUtc().add(const Duration(hours: 5, minutes: 30));
+String _rangeDate(DateTime value) =>
+    '${value.day.toString().padLeft(2, '0')} '
+    '${_month(value.month)} ${value.year}';
 
 String _month(int n) => const [
   'Jan',

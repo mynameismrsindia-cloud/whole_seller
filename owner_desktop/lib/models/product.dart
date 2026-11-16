@@ -23,6 +23,7 @@ class Sale {
   Sale({
     this.id = '',
     this.requestId = '',
+    this.invoiceNumber = '',
     required this.salesman,
     required this.userId,
     required this.store,
@@ -38,6 +39,16 @@ class Sale {
 
   final String id;
   final String requestId;
+  final String invoiceNumber;
+  String get displayInvoiceNumber {
+    if (invoiceNumber.isNotEmpty) return invoiceNumber;
+    final legacyOrderId = requestId.isNotEmpty ? requestId : id;
+    if (legacyOrderId.isEmpty) return '—';
+    return legacyOrderId
+        .substring(0, legacyOrderId.length < 8 ? legacyOrderId.length : 8)
+        .toUpperCase();
+  }
+
   final String salesman;
   final String userId;
   final String store;
@@ -58,6 +69,7 @@ class Sale {
     return Sale(
       id: json['id']?.toString() ?? '',
       requestId: json['requestId']?.toString() ?? '',
+      invoiceNumber: json['invoiceNumber']?.toString() ?? '',
       salesman: json['salesman']?.toString() ?? '',
       userId: json['sellerId']?.toString() ?? '',
       store: json['store']?.toString() ?? '',

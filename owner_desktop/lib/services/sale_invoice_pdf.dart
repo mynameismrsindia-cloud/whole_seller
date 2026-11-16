@@ -5,6 +5,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../models/product.dart';
+import '../utils/india_date_time.dart';
 
 Future<Uint8List> buildSaleInvoicePdf(
   Sale sale, {
@@ -12,21 +13,9 @@ Future<Uint8List> buildSaleInvoicePdf(
 }) async {
   final document = pw.Document();
   final items = orderItems == null || orderItems.isEmpty ? [sale] : orderItems;
-  final indiaTime = sale.createdAt.toUtc().add(
-    const Duration(hours: 5, minutes: 30),
-  );
-  final saleDate =
-      '${indiaTime.day.toString().padLeft(2, '0')} '
-      '${_month(indiaTime.month)} ${indiaTime.year}';
-  final saleTime =
-      '${indiaTime.hour.toString().padLeft(2, '0')}:'
-      '${indiaTime.minute.toString().padLeft(2, '0')}';
   final details = <(String, String)>[
-    (
-      'Invoice / order number',
-      sale.requestId.isEmpty ? sale.id : sale.requestId,
-    ),
-    ('Date & time', '$saleDate, $saleTime IST'),
+    ('Invoice number', sale.displayInvoiceNumber),
+    ('Date & time', formatIndiaDateTime(sale.createdAt)),
     ('Salesman', sale.salesman),
     ('Store', sale.store),
     ('Contact', sale.contact),
@@ -82,7 +71,6 @@ Future<Uint8List> buildSaleInvoicePdf(
               1: pw.FlexColumnWidth(0.7),
               2: pw.FlexColumnWidth(1),
               3: pw.FlexColumnWidth(1),
-              4: pw.FlexColumnWidth(1.3),
             },
             children: [
               pw.TableRow(
@@ -92,7 +80,6 @@ Future<Uint8List> buildSaleInvoicePdf(
                   _cell('Qty', bold: true),
                   _cell('Rate', bold: true),
                   _cell('Amount', bold: true),
-                  _cell('Product ID', bold: true),
                 ],
               ),
               for (final item in items)
@@ -102,7 +89,6 @@ Future<Uint8List> buildSaleInvoicePdf(
                     _cell('${item.quantity}'),
                     _cell('INR ${item.rate}'),
                     _cell('INR ${item.totalAmount}'),
-                    _cell(item.productId),
                   ],
                 ),
               pw.TableRow(
@@ -112,7 +98,6 @@ Future<Uint8List> buildSaleInvoicePdf(
                   _cell(''),
                   _cell(''),
                   _cell('INR $totalAmount', bold: true),
-                  _cell(''),
                 ],
               ),
               pw.TableRow(
@@ -121,7 +106,6 @@ Future<Uint8List> buildSaleInvoicePdf(
                     'Order status: ${orderStatus == OrderStatus.pending ? 'Pending' : 'Approved'}',
                     bold: true,
                   ),
-                  _cell(''),
                   _cell(''),
                   _cell(''),
                   _cell(''),
@@ -144,8 +128,10 @@ Future<Uint8List> buildSaleInvoicePdf(
 }
 
 Future<void> saveSaleInvoicePdf(Sale sale, {List<Sale>? orderItems}) async {
-  final invoiceId = sale.requestId.isEmpty ? sale.id : sale.requestId;
-  final safeId = invoiceId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+  final safeId = sale.displayInvoiceNumber.replaceAll(
+    RegExp(r'[^A-Za-z0-9_-]'),
+    '_',
+  );
   await FileSaver.instance.saveFile(
     name: safeId.isEmpty ? 'sale_invoice' : 'sale_invoice_$safeId',
     bytes: await buildSaleInvoicePdf(sale, orderItems: orderItems),
@@ -164,18 +150,3 @@ pw.Widget _cell(String value, {bool bold = false}) => pw.Padding(
     ),
   ),
 );
-
-String _month(int value) => const [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-][value - 1];

@@ -308,6 +308,14 @@ class WholesaleApiClient {
     );
   }
 
+  Future<void> approveSaleOrder(String requestId) async {
+    await _request(
+      'PATCH',
+      '/sales/orders/${Uri.encodeComponent(requestId)}/approve',
+      body: const {},
+    );
+  }
+
   void invalidateProducts() => _productCache.clear();
 
   Future<Map<String, dynamic>> _request(

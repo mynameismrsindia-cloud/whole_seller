@@ -216,10 +216,19 @@ class _OwnerAppState extends ConsumerState<OwnerApp> {
     });
   }
 
-  Future<void> _setSaleStatus(Sale sale, OrderStatus status) async {
+  Future<void> _setSaleStatus(List<Sale> order, OrderStatus status) async {
+    if (order.isEmpty) return;
     await _runRemote(() async {
-      await ref.read(apiRepositoryProvider).updateSaleStatus(sale, status);
-      if (mounted) setState(() => sale.orderStatus = status);
+      await ref
+          .read(apiRepositoryProvider)
+          .updateSaleOrderStatus(order, status);
+      if (mounted) {
+        setState(() {
+          for (final sale in order) {
+            sale.orderStatus = status;
+          }
+        });
+      }
     });
   }
 

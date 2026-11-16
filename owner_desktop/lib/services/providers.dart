@@ -167,5 +167,23 @@ class ApiRepository {
     await api.approveSale(sale.id);
   }
 
+  Future<void> updateSaleOrderStatus(
+    List<Sale> order,
+    OrderStatus status,
+  ) async {
+    if (order.isEmpty) {
+      throw ArgumentError.value(order, 'order', 'Must contain sale items.');
+    }
+    if (status != OrderStatus.approved) {
+      throw StateError('A sale can only be approved.');
+    }
+    final requestId = order.first.requestId;
+    if (requestId.isEmpty) {
+      await updateSaleStatus(order.first, status);
+      return;
+    }
+    await api.approveSaleOrder(requestId);
+  }
+
   void invalidateProducts() => api.invalidateProducts();
 }

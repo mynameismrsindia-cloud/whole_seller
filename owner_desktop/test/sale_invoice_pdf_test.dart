@@ -1,8 +1,20 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:owner_desktop/models/product.dart';
 import 'package:owner_desktop/services/sale_invoice_pdf.dart';
+import 'package:owner_desktop/utils/india_date_time.dart';
 
 void main() {
+  test('formats UTC sale timestamps as Indian date and time', () {
+    expect(
+      formatIndiaDateTime(DateTime.utc(2026, 1, 1, 21)),
+      '02 Jan 2026, 02:30 IST',
+    );
+    expect(
+      formatIndiaDateTime(DateTime.parse('2026-06-15T10:15:00+05:30')),
+      '15 Jun 2026, 10:15 IST',
+    );
+  });
+
   test('builds a PDF invoice for a sale', () async {
     final bytes = await buildSaleInvoicePdf(
       Sale(

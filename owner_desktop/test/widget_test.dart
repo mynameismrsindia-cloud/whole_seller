@@ -201,6 +201,7 @@ void main() {
     final sale = Sale(
       id: 'sale-1',
       requestId: 'batch-order-1234',
+      invoiceNumber: 'INV-000123',
       salesman: 'Seller Name',
       userId: 'private-user-id',
       store: 'Store',
@@ -212,20 +213,41 @@ void main() {
       rate: 50,
       createdAt: DateTime.utc(2026, 1, 1, 21),
     );
+    final secondSale = Sale(
+      id: 'sale-2',
+      requestId: 'batch-order-1234',
+      invoiceNumber: 'INV-000123',
+      salesman: 'Seller Name',
+      userId: 'private-user-id',
+      store: 'Store',
+      contact: '1234567890',
+      location: 'Kolkata',
+      productId: 'AB883C',
+      productName: 'Rice',
+      quantity: 3,
+      rate: 80,
+      createdAt: DateTime.utc(2026, 1, 1, 21),
+    );
     OrderStatus? changedStatus;
     var invoiceRequested = false;
+    List<Sale>? approvedOrder;
     await tester.pumpWidget(
       MaterialApp(
         home: StatefulBuilder(
           builder: (context, setState) => Scaffold(
             body: SalesListScreen(
-              sales: [sale],
+              sales: [sale, secondSale],
               initialRange: DateTimeRange(
                 start: DateTime(2026, 1, 2),
                 end: DateTime(2026, 1, 2),
               ),
-              onStatusChanged: (sale, status) {
-                setState(() => sale.orderStatus = status);
+              onStatusChanged: (order, status) {
+                setState(() {
+                  for (final sale in order) {
+                    sale.orderStatus = status;
+                  }
+                });
+                approvedOrder = order;
                 changedStatus = status;
               },
               onDownloadInvoice: (_) async {
@@ -244,7 +266,7 @@ void main() {
     final columns = tester.widget<DataTable>(find.byType(DataTable)).columns;
     expect(columns.map((column) => (column.label as Text).data), [
       'Date & time',
-      'Order',
+      'Invoice #',
       'Salesman',
       'Store',
       'Contact',
@@ -255,7 +277,12 @@ void main() {
       'Order status',
       'Action',
     ]);
-    expect(find.text('batch-or'), findsOneWidget);
+    expect(find.text('INV-000123'), findsOneWidget);
+    expect(find.text('Rice\nRice'), findsOneWidget);
+    expect(find.text('AB883C'), findsNothing);
+    expect(find.text('2\n3'), findsOneWidget);
+    expect(find.text('₹50\n₹80'), findsOneWidget);
+    expect(tester.widget<DataTable>(find.byType(DataTable)).rows, hasLength(1));
     expect(find.text('Total'), findsNothing);
     final tableScrollbar = tester.widget<Scrollbar>(find.byType(Scrollbar));
     expect(tableScrollbar.thumbVisibility, isTrue);
@@ -272,6 +299,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('approve-order-sale-1')));
     await tester.pump();
     expect(changedStatus, OrderStatus.approved);
+    expect(approvedOrder, [sale, secondSale]);
     expect(find.text('Pending'), findsNothing);
     expect(find.text('Approved'), findsNWidgets(2));
     expect(

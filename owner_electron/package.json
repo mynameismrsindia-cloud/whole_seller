@@ -1,0 +1,43 @@
+{
+  "name": "owner-electron-windows",
+  "version": "1.0.0",
+  "description": "Windows desktop shell for the hosted Bonzar Owner web app",
+  "private": true,
+  "main": "src/main.cjs",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "dist:win": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "45.3.3",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "com.bonzar.owner",
+    "productName": "Bonzar Owner",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false,
+      "artifactName": "Bonzar-Owner-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Bonzar Owner"
+    }
+  }
+}

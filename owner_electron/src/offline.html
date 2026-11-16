@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
+    >
+    <title>Bonzar Owner unavailable</title>
+    <style>
+      body {
+        align-items: center;
+        background: #f4f7f7;
+        color: #173a36;
+        display: flex;
+        font: 16px system-ui, sans-serif;
+        justify-content: center;
+        margin: 0;
+        min-height: 100vh;
+        text-align: center;
+      }
+      main { max-width: 34rem; padding: 2rem; }
+      button { cursor: pointer; padding: 0.7rem 1.2rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Owner workspace is unavailable</h1>
+      <p>Check your internet connection, then try again.</p>
+      <button id="retry" type="button">Retry</button>
+    </main>
+    <script>
+      document.getElementById('retry').addEventListener('click', () => {
+        window.location.href = 'https://mynameismrsindia-cloud.github.io/owner_web/';
+      });
+    </script>
+  </body>
+</html>

@@ -68,6 +68,26 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "Inno Setup failed with exit code $LASTEXITCODE."
           }
+      - name: Report executable and installer diagnostics
+        shell: pwsh
+        run: |
+          $files = @(
+            (Join-Path $env:GITHUB_WORKSPACE 'owner_desktop\build\windows\x64\runner\Release\owner_desktop.exe'),
+            (Join-Path $env:GITHUB_WORKSPACE 'owner_desktop\build\installer\owner-desktop-Setup.exe')
+          )
+
+          foreach ($file in $files) {
+            $item = Get-Item -LiteralPath $file
+            $signature = Get-AuthenticodeSignature -FilePath $file
+            $hash = Get-FileHash -LiteralPath $file -Algorithm SHA256
+
+            Write-Host "File: $($item.FullName)"
+            Write-Host "Size (bytes): $($item.Length)"
+            Write-Host "SHA-256: $($hash.Hash)"
+            Write-Host "Authenticode status: $($signature.Status)"
+            Write-Host "Signer: $($signature.SignerCertificate.Subject)"
+            Write-Host ""
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: owner-desktop-Setup

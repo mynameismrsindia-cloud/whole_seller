@@ -26,24 +26,14 @@ flutter build windows --release --dart-define=API_BASE_URL=https://wholesellerba
 Owner accounts are provisioned privately by the API administrator. There is no
 Owner sign-up option in the app. The GitHub Actions Windows workflow uses the
 production URL by default; `PRODUCTION_API_BASE_URL` can override it. It
-produces an installer artifact with the app and Visual C++ runtime. If the
-signing secrets below are configured, it signs and verifies the app and
-installer. Without them, the installer is unsigned and Smart App Control may
-block it.
+produces the `owner-desktop-windows-x64` ZIP artifact containing Flutter's
+Windows release folder. Download and extract the complete ZIP, then run
+`owner_desktop.exe` from the extracted folder; do not run it from inside the
+ZIP. The workflow does not create an Inno Setup installer.
 
-Windows Smart App Control may block unsigned installers. Before running the
-Windows workflow, configure these repository Actions secrets with a trusted
-Windows code-signing certificate issued by a certificate authority:
-
-- `WINDOWS_SIGNING_CERTIFICATE`: the PFX/P12 certificate file encoded as one
-  Base64 string.
-- `WINDOWS_SIGNING_PASSWORD`: the certificate's password.
-
-Create these secrets under **Settings > Secrets and variables > Actions**.
-Never commit the certificate or share it in chat. Configure both secrets
-together; the workflow rejects a partially configured certificate. Smart App
-Control may still take time to establish reputation for a newly issued signing
-certificate.
+The executable is unsigned for private testing. Windows Smart App Control may
+still block new or unrecognized builds because they have no publisher
+signature or established reputation.
 
 See the repository README for API deployment, database, Owner provisioning,
 and the Firebase data migration limitation.

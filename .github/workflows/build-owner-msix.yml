@@ -80,7 +80,7 @@ jobs:
           [xml]$manifest = Get-Content -LiteralPath (Join-Path $unpackDir 'AppxManifest.xml')
           $identity = $manifest.SelectSingleNode("/*[local-name()='Package']/*[local-name()='Identity']")
           $expected = @{
-            Name = 'PushpenduDas.WholeSalerOwnerPackage'
+            Name = 'PushpenduDas.WholeSalerOwner'
             Publisher = 'CN=84FCF719-D297-45CF-B542-80907008BEBC'
             Version = $env:MSIX_VERSION
             ProcessorArchitecture = 'x64'
@@ -89,6 +89,12 @@ jobs:
             if ($identity.GetAttribute($key) -ne $expected[$key]) {
               throw "MSIX identity mismatch for $key. Found '$($identity.GetAttribute($key))'."
             }
+          }
+
+          $expectedFamilyName = 'PushpenduDas.WholeSalerOwner_wn293bz8s5hj6'
+          $packageFamilyName = "$($identity.GetAttribute('Name'))_wn293bz8s5hj6"
+          if ($packageFamilyName -ne $expectedFamilyName) {
+            throw "MSIX package family name mismatch. Expected '$expectedFamilyName', got '$packageFamilyName'."
           }
 
           $properties = $manifest.SelectSingleNode("/*[local-name()='Package']/*[local-name()='Properties']")
@@ -135,6 +141,7 @@ jobs:
             throw "Expected an unsigned Store-submission package before Partner Center upload; found '$($signature.Status)'."
           }
           Write-Host "Validated MSIX: $($packages[0].FullName)"
+          Write-Host "Package family name: $packageFamilyName"
           Write-Host "Size (bytes): $($packages[0].Length)"
           Write-Host "SHA-256: $((Get-FileHash -LiteralPath $packages[0].FullName -Algorithm SHA256).Hash)"
           Write-Host "Authenticode status: $($signature.Status); Microsoft Store signs packages distributed through the Store."

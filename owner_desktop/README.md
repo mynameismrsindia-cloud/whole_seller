@@ -29,7 +29,8 @@ Owner sign-up option in the app. The existing
 installer. The separate `.github/workflows/build-owner-msix.yml` workflow builds
 a Store-submission MSIX on a Windows runner; it uses the production API URL by
 default, and `PRODUCTION_API_BASE_URL` can override it. Its package identity is
-`PushpenduDas.WholeSalerOwnerPackage`, published by
+`PushpenduDas.WholeSalerOwner`, with package family name
+`PushpenduDas.WholeSalerOwner_wn293bz8s5hj6`, published by
 `CN=84FCF719-D297-45CF-B542-80907008BEBC`.
 
 The MSIX workflow creates an unsigned package for Partner Center submission;
@@ -45,7 +46,8 @@ To create and download an MSIX, push the changes to GitHub and open
 **Actions → Build Owner MSIX for Microsoft Store → Run workflow**, select
 `production`, and run it. After the run succeeds, download the
 `owner-desktop-msix-<run number>` artifact. The workflow unpacks the MSIX to
-validate its manifest identity, version, architecture, and referenced images.
+validate its manifest identity, package family name, version, architecture,
+and referenced images.
 Upload the `.msix` file from the downloaded artifact to the app's **Packages**
 page in Partner Center; then complete the listing and submission steps there.
 

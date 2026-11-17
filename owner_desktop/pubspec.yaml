@@ -62,7 +62,7 @@ dependency_overrides:
 msix_config:
   display_name: WholeSale Owner Desktop
   publisher_display_name: Pushpendu Das
-  identity_name: PushpenduDas.WholeSalerOwnerPackage
+  identity_name: PushpenduDas.WholeSalerOwner
   publisher: CN=84FCF719-D297-45CF-B542-80907008BEBC
   msix_version: 1.0.0.0
   logo_path: assets/bonzar_logo.png

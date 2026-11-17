@@ -98,7 +98,7 @@ jobs:
           }
 
           $properties = $manifest.SelectSingleNode("/*[local-name()='Package']/*[local-name()='Properties']")
-          if ($properties.SelectSingleNode("*[local-name()='DisplayName']").InnerText -ne 'WholeSale Owner Desktop' -or
+          if ($properties.SelectSingleNode("*[local-name()='DisplayName']").InnerText -ne 'WholeSalerOwner' -or
               $properties.SelectSingleNode("*[local-name()='PublisherDisplayName']").InnerText -ne 'Pushpendu Das') {
             throw 'MSIX display name or publisher display name does not match the Store configuration.'
           }

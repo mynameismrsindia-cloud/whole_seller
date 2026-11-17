@@ -60,7 +60,7 @@ dependency_overrides:
 # following page: https://dart.dev/tools/pub/pubspec
 
 msix_config:
-  display_name: WholeSale Owner Desktop
+  display_name: WholeSalerOwner
   publisher_display_name: Pushpendu Das
   identity_name: PushpenduDas.WholeSalerOwner
   publisher: CN=84FCF719-D297-45CF-B542-80907008BEBC

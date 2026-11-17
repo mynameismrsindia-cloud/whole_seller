@@ -31,7 +31,9 @@ a Store-submission MSIX on a Windows runner; it uses the production API URL by
 default, and `PRODUCTION_API_BASE_URL` can override it. Its package identity is
 `PushpenduDas.WholeSalerOwner`, with package family name
 `PushpenduDas.WholeSalerOwner_wn293bz8s5hj6`, published by
-`CN=84FCF719-D297-45CF-B542-80907008BEBC`.
+`CN=84FCF719-D297-45CF-B542-80907008BEBC`. The reserved package display name
+is `WholeSalerOwner`; its Microsoft Store ID is `9MW9CR8MD0LN`. The Store ID
+identifies the Partner Center listing and is not a field in the MSIX manifest.
 
 The MSIX workflow creates an unsigned package for Partner Center submission;
 Microsoft Store signs packages distributed through the Store. GitHub Actions

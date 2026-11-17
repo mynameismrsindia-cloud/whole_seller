@@ -113,10 +113,20 @@ jobs:
 
           $imageReferences = $manifest.SelectNodes("//*[local-name()='Logo']/text() | //@*[contains(local-name(),'Logo')] | //@*[local-name()='Image']")
           foreach ($reference in $imageReferences) {
-            $imagePath = $reference.Value.Trim()
-            if ($imagePath -match '(?i)\.(png|jpg|jpeg)$' -and
-                -not (Test-Path -LiteralPath (Join-Path $unpackDir $imagePath) -PathType Leaf)) {
-              throw "MSIX manifest references missing image '$imagePath'."
+            $imagePath = $reference.Value.Trim().Replace('/', '\')
+            if ($imagePath -match '(?i)\.(png|jpg|jpeg)$') {
+              $resolvedImagePath = Join-Path $unpackDir $imagePath
+              if (-not (Test-Path -LiteralPath $resolvedImagePath -PathType Leaf)) {
+                $imageDirectory = Split-Path -Parent $resolvedImagePath
+                $imageName = [IO.Path]::GetFileNameWithoutExtension($imagePath)
+                $imageExtension = [IO.Path]::GetExtension($imagePath)
+                $scaleVariants = @(
+                  Get-ChildItem -LiteralPath $imageDirectory -Filter "$imageName.scale-*$imageExtension" -File
+                )
+                if ($scaleVariants.Count -eq 0) {
+                  throw "MSIX manifest references missing image '$imagePath' and has no scale-qualified asset."
+                }
+              }
             }
           }
 
